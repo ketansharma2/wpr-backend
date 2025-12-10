@@ -1,20 +1,28 @@
 const express = require("express");
-const supabase = require("../config/supabase");
+const supabase = require("../../config/supabase");
 const router = express.Router();
 
-
+// Filter HOD tasks (self or team)
 router.post("/filter", async (req, res) => {
   try {
-    console.log('Tasks filter request received:', req.body);
+    console.log('HOD tasks filter request received:', req.body);
     const {
-      user_id,
+      user_id, // HOD user_id
+      view_tasks_of, // "self" or "team"
+      target_user_id, // for team view: the team member whose tasks to view
       date_filter,
       task_type,
+      category, // "all", "self", "assigned"
       status,
       custom_date
     } = req.body;
-    console.log('Extracted task_type:', task_type, 'status:', status);
-    console.log('User ID:', user_id);
+
+    // Determine whose tasks to view
+    const targetUserId = view_tasks_of === "self" ? user_id : target_user_id;
+
+    if (view_tasks_of === "team" && !target_user_id) {
+      return res.status(400).json({ error: "target_user_id required when viewing team tasks" });
+    }
 
     const format = (d) => new Date(d).toISOString().split("T")[0];
 
@@ -37,7 +45,7 @@ router.post("/filter", async (req, res) => {
     }
 
     if (date_filter === "custom") {
-      startDate = endDate = custom_date;     // specific date only
+      startDate = endDate = custom_date;
     }
 
     if (date_filter === "past_week") {
@@ -68,18 +76,17 @@ router.post("/filter", async (req, res) => {
     const applyFilters = (table) => {
       let q;
 
-      // 🔥 KEY DIFFERENCE → THIS FIXES YOUR MASTER TASK ISSUE
       if (table === "self_tasks") {
-        q = supabase.from(table).select("*").eq("user_id", user_id);
+        q = supabase.from(table).select("*").eq("user_id", targetUserId);
       } else {
-        q = supabase.from(table).select("*").eq("assigned_to", user_id);
+        q = supabase.from(table).select("*").eq("assigned_to", targetUserId);
       }
 
       if (startDate && endDate) {
         q = q.gte("date", startDate).lte("date", endDate);
       }
 
-      // Task type filter only applies to self_tasks (master_tasks don't have task_type)
+      // Task type filter only applies to self_tasks
       if (table === "self_tasks" && task_type && task_type !== "all") {
         q = q.eq("task_type", task_type);
       }
@@ -91,26 +98,45 @@ router.post("/filter", async (req, res) => {
       return q;
     };
 
-    // ---------------------- FETCH BOTH TABLES ----------------------
-    const [selfRes, masterRes] = await Promise.all([
-      applyFilters("self_tasks"),
-      applyFilters("master_tasks")
-    ]);
+    // ---------------------- FETCH BASED ON CATEGORY ----------------------
+    let response = {};
 
-    console.log('Self tasks result:', selfRes.data?.length || 0, 'items');
-    console.log('Master tasks result:', masterRes.data?.length || 0, 'items');
+    if (category === "all") {
+      // Fetch both self_tasks and master_tasks
+      const [selfRes, masterRes] = await Promise.all([
+        applyFilters("self_tasks"),
+        applyFilters("master_tasks")
+      ]);
 
-    if (selfRes.error || masterRes.error) {
-      return res.status(400).json({
-        error: selfRes.error?.message || masterRes.error?.message
-      });
+      if (selfRes.error || masterRes.error) {
+        return res.status(400).json({
+          error: selfRes.error?.message || masterRes.error?.message
+        });
+      }
+
+      response = {
+        self_tasks: selfRes.data,
+        master_tasks: masterRes.data
+      };
+    } else if (category === "self") {
+      // Fetch only self_tasks
+      const { data, error } = await applyFilters("self_tasks");
+      if (error) return res.status(400).json({ error: error.message });
+
+      response = { self_tasks: data, master_tasks: [] };
+    } else if (category === "assigned") {
+      // Fetch only master_tasks
+      const { data, error } = await applyFilters("master_tasks");
+      if (error) return res.status(400).json({ error: error.message });
+
+      response = { self_tasks: [], master_tasks: data };
+    } else {
+      return res.status(400).json({ error: "Invalid category. Must be 'all', 'self', or 'assigned'" });
     }
 
-    const response = {
-      self_tasks: selfRes.data,
-      master_tasks: masterRes.data
-    };
-    console.log('Final response:', {
+    console.log('HOD filter response:', {
+      view_tasks_of,
+      target_user: targetUserId,
       self_tasks_count: response.self_tasks?.length || 0,
       master_tasks_count: response.master_tasks?.length || 0
     });
@@ -122,8 +148,7 @@ router.post("/filter", async (req, res) => {
   }
 });
 
-// ------------------------------------------------------------------------------------------
-//post new task
+// Create self task for HOD
 router.post("/create", async (req, res) => {
   try {
     const {
@@ -164,7 +189,8 @@ router.post("/create", async (req, res) => {
   }
 });
 
-//update tasks 
+
+// Update self task for HOD
 router.put("/:taskId", async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -179,7 +205,6 @@ router.put("/:taskId", async (req, res) => {
       file_link
     } = req.body;
 
-    // Update row
     const { data, error } = await supabase
       .from("self_tasks")
       .update({
@@ -192,8 +217,8 @@ router.put("/:taskId", async (req, res) => {
         status,
         file_link
       })
-      .eq("task_id", taskId)        // match by task id
-      .select();                   // return updated row
+      .eq("task_id", taskId)
+      .select();
 
     if (error) return res.status(400).json({ error: error.message });
 
@@ -207,6 +232,24 @@ router.put("/:taskId", async (req, res) => {
   }
 });
 
+// Get team members for task viewing dropdown (excluding current HOD)
+router.get("/team-members/:department/:exclude_user_id", async (req, res) => {
+  try {
+    const { department, exclude_user_id } = req.params;
 
+    const { data, error } = await supabase
+      .from("users")
+      .select("user_id, name, email")
+      .eq("dept", department)
+      .neq("user_id", exclude_user_id);
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    res.json({ team_members: data });
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 module.exports = router;
