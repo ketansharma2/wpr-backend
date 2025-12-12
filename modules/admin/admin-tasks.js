@@ -1,6 +1,7 @@
 const express = require("express");
 const supabase = require("../../config/supabase");
 const router = express.Router();
+const auth = require("../auth/authMiddleware");
 
 // Filter all members' tasks for admin
 router.post("/filter", async (req, res) => {

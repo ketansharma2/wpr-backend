@@ -17,13 +17,15 @@ app.use("/hod/meetings", require("./modules/hod/hod-meetings"));
 app.use("/hod/weekly", require("./modules/hod/hod-weekly"));
 app.use("/hod/reports", require("./modules/hod/hod-download"));
 
-app.use("/login", require("./modules/login"));
+app.use("/login", require("./modules/auth/login"));
 app.use("/weekly", require("./modules/weekly"));
 app.use("/reports", require("./modules/reportsdownload"));
 app.use("/admin/members", require("./modules/admin/members"));
 app.use("/admin/tasks", require("./modules/admin/admin-tasks"));
 app.use("/admin/assign",require ("./modules/admin/admin-assign"))
 app.use("/admin/meetings", require("./modules/admin/admin-meetings"));
+app.use("/admin/analytics", require("./modules/admin/analytics"));
+app.use("/admin/deptanalytics", require("./modules/admin/dept-analytics"));
 app.get("/", (req, res) => {
   res.send("Server is running");
 });

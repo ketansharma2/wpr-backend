@@ -1,6 +1,7 @@
 const express = require("express");
 const supabase = require("../../config/supabase");
 const router = express.Router();
+const auth = require("../auth/authMiddleware");
 
 // Get all members for analytics dropdown
 router.get("/members", async (req, res) => {
@@ -59,9 +60,9 @@ router.post("/filter", async (req, res) => {
 
     // Calculate counts
     const total_tasks = allTasks.length;
-    const done = allTasks.filter(task => task.status === 'done').length;
-    const in_progress = allTasks.filter(task => task.status === 'in progress').length;
-    const not_started = allTasks.filter(task => task.status === 'not started').length;
+    const done = allTasks.filter(task => task.status === 'Done').length;
+    const in_progress = allTasks.filter(task => task.status === 'In Progress').length;
+    const not_started = allTasks.filter(task => task.status === 'Not Started').length;
     const self_tasks = selfTasks.length;
     const assigned_tasks = masterTasks.length;
 

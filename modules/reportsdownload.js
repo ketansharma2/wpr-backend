@@ -1,6 +1,7 @@
 const express = require("express");
 const PDFDocument = require("pdfkit");
 const supabase = require("../config/supabase");
+const auth = require("./auth/authMiddleware");
 
 const router = express.Router();
 

@@ -1,6 +1,8 @@
 const express = require("express");
 const supabase = require("../config/supabase");
 const router = express.Router();
+const auth = require("./auth/authMiddleware");
+
 
 router.post("/", async (req, res) => {
   try {

@@ -1,6 +1,7 @@
 const express = require("express");
 const supabase = require("../config/supabase");
 const router = express.Router();
+const auth = require("./auth/authMiddleware");
 
 //fetch meets with filters
 router.post("/filter", async (req, res) => {
