@@ -18,7 +18,7 @@ router.post("/", async (req, res) => {
     // ---------- FETCH USER PROFILE ----------
     const { data: userData, error: userError } = await supabase
         .from("users")
-        .select("user_id, name, email, dept, role")
+        .select("user_id, name, email, dept, role, user_type")
         .eq("user_id", data.user.id)
         .single();
 
