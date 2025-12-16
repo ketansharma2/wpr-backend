@@ -12,7 +12,8 @@ router.post("/filter", async (req, res) => {
       date_filter,
       task_type,
       status,
-      custom_date
+      custom_date,
+      category
     } = req.body;
     console.log('Extracted task_type:', task_type, 'status:', status);
     console.log('User ID:', user_id);
@@ -92,24 +93,34 @@ router.post("/filter", async (req, res) => {
       return q;
     };
 
-    // ---------------------- FETCH BOTH TABLES ----------------------
-    const [selfRes, masterRes] = await Promise.all([
-      applyFilters("self_tasks"),
-      applyFilters("master_tasks")
-    ]);
+    // ---------------------- FETCH TABLES BASED ON CATEGORY ----------------------
+    let selfRes = null;
+    let masterRes = null;
 
-    console.log('Self tasks result:', selfRes.data?.length || 0, 'items');
-    console.log('Master tasks result:', masterRes.data?.length || 0, 'items');
+    if (category === 'self') {
+      selfRes = await applyFilters("self_tasks");
+    } else if (category === 'assigned') {
+      masterRes = await applyFilters("master_tasks");
+    } else {
+      // 'all' or default
+      [selfRes, masterRes] = await Promise.all([
+        applyFilters("self_tasks"),
+        applyFilters("master_tasks")
+      ]);
+    }
 
-    if (selfRes.error || masterRes.error) {
+    console.log('Self tasks result:', selfRes?.data?.length || 0, 'items');
+    console.log('Master tasks result:', masterRes?.data?.length || 0, 'items');
+
+    if ((selfRes && selfRes.error) || (masterRes && masterRes.error)) {
       return res.status(400).json({
-        error: selfRes.error?.message || masterRes.error?.message
+        error: (selfRes?.error?.message) || (masterRes?.error?.message)
       });
     }
 
     const response = {
-      self_tasks: selfRes.data,
-      master_tasks: masterRes.data
+      self_tasks: selfRes?.data || [],
+      master_tasks: masterRes?.data || []
     };
     console.log('Final response:', {
       self_tasks_count: response.self_tasks?.length || 0,
