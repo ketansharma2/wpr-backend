@@ -73,7 +73,7 @@ router.post("/filter", async (req, res) => {
       if (table === "self_tasks") {
         q = supabase.from(table).select("*").eq("user_id", user_id);
       } else {
-        q = supabase.from(table).select("*").eq("assigned_to", user_id);
+        q = supabase.from(table).select("*, assigned_by_user:users!assigned_by(name)").eq("assigned_to", user_id);
       }
 
       if (startDate && endDate) {
