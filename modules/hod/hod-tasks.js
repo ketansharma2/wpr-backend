@@ -79,7 +79,10 @@ router.post("/filter", async (req, res) => {
       if (table === "self_tasks") {
         q = supabase.from(table).select("*").eq("user_id", targetUserId);
       } else {
-        q = supabase.from(table).select("*").eq("assigned_to", targetUserId);
+        q = supabase.from(table).select(`
+          *,
+          users!assigned_by(name)
+        `).eq("assigned_to", targetUserId);
       }
 
       if (startDate && endDate) {
@@ -232,24 +235,24 @@ router.put("/:taskId", async (req, res) => {
   }
 });
 
-// Get team members for task viewing dropdown (excluding current HOD)
-router.get("/team-members/:department/:exclude_user_id", async (req, res) => {
-  try {
-    const { department, exclude_user_id } = req.params;
+  // Get team members for task viewing dropdown (excluding current HOD)
+  router.get("/team-members/:department/:exclude_user_id", async (req, res) => {
+    try {
+      const { department, exclude_user_id } = req.params;
 
-    const { data, error } = await supabase
-      .from("users")
-      .select("user_id, name, email")
-      .eq("dept", department)
-      .neq("user_id", exclude_user_id);
+      const { data, error } = await supabase
+        .from("users")
+        .select("user_id, name, email")
+        .eq("dept", department)
+        .neq("user_id", exclude_user_id);
 
-    if (error) return res.status(400).json({ error: error.message });
+      if (error) return res.status(400).json({ error: error.message });
 
-    res.json({ team_members: data });
+      res.json({ team_members: data });
 
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
+    } catch (err) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
 
 module.exports = router;

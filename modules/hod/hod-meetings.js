@@ -9,7 +9,7 @@ router.post("/filter", async (req, res) => {
     const {
       user_id, // HOD user_id
       view_type, // "self" or "team"
-      target_user_id, // for team view: the team member whose meetings to view
+      target_user_id, // for team  view: the team member whose meetings to view
       date_filter,
       status,
       custom_date

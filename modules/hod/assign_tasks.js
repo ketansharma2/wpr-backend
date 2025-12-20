@@ -6,28 +6,36 @@ const router = express.Router();
 router.post("/create", async (req, res) => {
   try {
     const {
+      user_id, // HOD user_id
       assigned_by, // HOD user_id
       assigned_to, // team member user_id
       date,
       timeline,
       task_name,
-      time,
       status,
-      file_link
+      assignee_remarks,
+      upload_closing,
+      remarks,
+      parameter,
+      end_goal
     } = req.body;
 
     const { data, error } = await supabase
       .from("master_tasks")
       .insert([
         {
+          user_id,
           assigned_by,
           assigned_to,
           date,
           timeline,
           task_name,
-          time,
           status,
-          file_link
+          assignee_remarks,
+          upload_closing,
+          remarks,
+          parameter,
+          end_goal
         }
       ]).select();
 
@@ -72,9 +80,12 @@ router.put("/:taskId", async (req, res) => {
       date,
       timeline,
       task_name,
-      time,
       status,
-      file_link
+      assignee_remarks,
+      upload_closing,
+      remarks,
+      parameter,
+      end_goal
     } = req.body;
 
     // First verify that this HOD assigned this task
@@ -98,9 +109,12 @@ router.put("/:taskId", async (req, res) => {
         date,
         timeline,
         task_name,
-        time,
         status,
-        file_link
+        assignee_remarks,
+        upload_closing,
+        remarks,
+        parameter,
+        end_goal
       })
       .eq("task_id", taskId)
       .select();

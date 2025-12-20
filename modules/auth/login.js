@@ -26,10 +26,10 @@ router.post("/", async (req, res) => {
         return res.status(500).json({ message: "Error fetching user details" });
     }
 
-    // ---------- REDIRECT BASED ON ROLE ----------
+    // ---------- REDIRECT BASED ON USER TYPE ----------
     let redirectTo = "/home";
-    if (userData.role === "HOD") redirectTo = "/hod/home";
-    if (userData.role === "Admin") redirectTo = "/admin/home";
+    if (userData.user_type === "HOD") redirectTo = "/hod/home";
+    if (userData.user_type === "Admin") redirectTo = "/admin/home";
 
     // ---------- SEND TOKEN + PROFILE TO FRONTEND ----------
     return res.json({
