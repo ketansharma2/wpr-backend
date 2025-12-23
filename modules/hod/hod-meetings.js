@@ -16,7 +16,34 @@ router.post("/filter", async (req, res) => {
     } = req.body;
 
     // Determine whose meetings to view
-    const targetUserId = view_type === "self" ? user_id : target_user_id;
+    let targetUserIds = [];
+    if (view_type === "all") {
+      // Get all team members in the department
+      const { data: hodData, error: hodError } = await supabase
+        .from("users")
+        .select("dept")
+        .eq("user_id", user_id)
+        .single();
+
+      if (hodError) {
+        console.error("HOD data error:", hodError);
+        return res.status(400).json({ error: hodError.message });
+      }
+
+      const { data: teamMembers, error: teamError } = await supabase
+        .from("users")
+        .select("user_id")
+        .eq("dept", hodData.dept);
+
+      if (teamError) {
+        console.error("Team members error:", teamError);
+        return res.status(400).json({ error: teamError.message });
+      }
+
+      targetUserIds = teamMembers.map(member => member.user_id);
+    } else {
+      targetUserIds = [view_type === "self" ? user_id : target_user_id];
+    }
 
     if (view_type === "team" && !target_user_id) {
       return res.status(400).json({ error: "target_user_id required when viewing team meetings" });
@@ -72,7 +99,15 @@ router.post("/filter", async (req, res) => {
     }
 
     // ---------- BUILD QUERY ----------
-    let query = supabase.from("meetings").select("*").eq("user_id", targetUserId);
+    let query = supabase.from("meetings").select(`
+      *,
+      users(name)
+    `);
+    if (view_type === "all") {
+      query = query.in("user_id", targetUserIds);
+    } else {
+      query = query.eq("user_id", targetUserIds[0]);
+    }
 
     if (startDate && endDate) {
       query = query.gte("date", startDate).lte("date", endDate);
@@ -86,7 +121,13 @@ router.post("/filter", async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
 
-    res.json({ meetings: data, view_type });
+    // Add owner_name to meetings for 'all' view
+    const meetingsWithOwner = data.map(meeting => ({
+      ...meeting,
+      owner_name: meeting.users?.name || 'Unknown'
+    }));
+
+    res.json({ meetings: meetingsWithOwner, view_type });
 
   } catch (err) {
     res.status(500).json({ error: "Server Error" });

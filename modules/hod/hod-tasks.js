@@ -18,7 +18,34 @@ router.post("/filter", async (req, res) => {
     } = req.body;
 
     // Determine whose tasks to view
-    const targetUserId = view_tasks_of === "self" ? user_id : target_user_id;
+    let targetUserIds = [];
+    if (view_tasks_of === "all") {
+      // Get all team members in the department
+      const { data: hodData, error: hodError } = await supabase
+        .from("users")
+        .select("dept")
+        .eq("user_id", user_id)
+        .single();
+
+      if (hodError) {
+        console.error("HOD data error:", hodError);
+        return res.status(400).json({ error: hodError.message });
+      }
+
+      const { data: teamMembers, error: teamError } = await supabase
+        .from("users")
+        .select("user_id")
+        .eq("dept", hodData.dept);
+
+      if (teamError) {
+        console.error("Team members error:", teamError);
+        return res.status(400).json({ error: teamError.message });
+      }
+
+      targetUserIds = teamMembers.map(member => member.user_id);
+    } else {
+      targetUserIds = [view_tasks_of === "self" ? user_id : target_user_id];
+    }
 
     if (view_tasks_of === "team" && !target_user_id) {
       return res.status(400).json({ error: "target_user_id required when viewing team tasks" });
@@ -77,12 +104,25 @@ router.post("/filter", async (req, res) => {
       let q;
 
       if (table === "self_tasks") {
-        q = supabase.from(table).select("*").eq("user_id", targetUserId);
+        q = supabase.from(table).select(`
+          *,
+          users(name)
+        `);
+        if (view_tasks_of === "all") {
+          q = q.in("user_id", targetUserIds);
+        } else {
+          q = q.eq("user_id", targetUserIds[0]);
+        }
       } else {
         q = supabase.from(table).select(`
           *,
           users!assigned_by(name)
-        `).eq("assigned_to", targetUserId);
+        `);
+        if (view_tasks_of === "all") {
+          q = q.in("assigned_to", targetUserIds);
+        } else {
+          q = q.eq("assigned_to", targetUserIds[0]);
+        }
       }
 
       if (startDate && endDate) {
@@ -139,7 +179,7 @@ router.post("/filter", async (req, res) => {
 
     console.log('HOD filter response:', {
       view_tasks_of,
-      target_user: targetUserId,
+      target_users: targetUserIds.join(', '),
       self_tasks_count: response.self_tasks?.length || 0,
       master_tasks_count: response.master_tasks?.length || 0
     });

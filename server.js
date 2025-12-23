@@ -12,9 +12,13 @@ app.use(cors());
 app.use(express.json());
 app.use("/tasks", require("./modules/tasks"));
 app.use("/meetings", require("./modules/meetings"));
+app.use("/dashboard", require("./modules/dashboard"));
+
+
 app.use("/hod/tasks", require("./modules/hod/hod-tasks"));
 app.use("/hod/assign", require("./modules/hod/assign_tasks"));
 app.use("/hod/meetings", require("./modules/hod/hod-meetings"));
+app.use("/hod/dashboard", require("./modules/hod/hod-dashboard"));
 app.use("/hod/weekly", require("./modules/hod/hod-weekly"));
 app.use("/hod/reports", require("./modules/hod/hod-download"));
 
