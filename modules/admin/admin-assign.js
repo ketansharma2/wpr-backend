@@ -6,28 +6,36 @@ const auth = require("../auth/authMiddleware");
 router.post("/create", async (req, res) => {
   try {
     const {
+      user_id, // Admin user_id
       assigned_by, // Admin user_id
       assigned_to, // Any member user_id
       date,
       timeline,
       task_name,
-      time,
       status,
-      file_link
+      assignee_remarks,
+      upload_closing,
+      remarks,
+      parameter,
+      end_goal
     } = req.body;
 
     const { data, error } = await supabase
       .from("master_tasks")
       .insert([
         {
+          user_id,
           assigned_by,
           assigned_to,
           date,
           timeline,
           task_name,
-          time,
           status,
-          file_link
+          assignee_remarks,
+          upload_closing,
+          remarks,
+          parameter,
+          end_goal
         }
       ]).select();
 
@@ -53,9 +61,12 @@ router.put("/:taskId", async (req, res) => {
       date,
       timeline,
       task_name,
-      time,
       status,
-      file_link
+      assignee_remarks,
+      upload_closing,
+      remarks,
+      parameter,
+      end_goal
     } = req.body;
 
     const { data, error } = await supabase
@@ -66,9 +77,12 @@ router.put("/:taskId", async (req, res) => {
         date,
         timeline,
         task_name,
-        time,
         status,
-        file_link
+        assignee_remarks,
+        upload_closing,
+        remarks,
+        parameter,
+        end_goal
       })
       .eq("task_id", taskId)
       .select();

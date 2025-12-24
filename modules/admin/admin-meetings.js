@@ -9,7 +9,7 @@ router.post("/filter", async (req, res) => {
     console.log('Admin meetings filter request received:', req.body);
     const {
       user_id, // Admin user_id (for logging)
-      target_user_id, // specific member (mandatory)
+      target_user_id, // specific member (optional - use 'all' for all members)
       date_filter,
       status,
       custom_date
@@ -64,7 +64,16 @@ router.post("/filter", async (req, res) => {
     }
 
     // ---------------------- BUILD QUERY ----------------------
-    let query = supabase.from("meetings").select("*").eq("user_id", target_user_id);
+    let query = supabase.from("meetings").select(`
+      *,
+      users(name)
+    `);
+
+    // Filter by target user only if specified (not 'all' or null)
+    if (target_user_id && target_user_id !== 'all') {
+      query = query.eq("user_id", target_user_id);
+    }
+    // If target_user_id is 'all' or null, don't filter by user (fetch all users' meetings)
 
     if (startDate && endDate) {
       query = query.gte("date", startDate).lte("date", endDate);
@@ -78,10 +87,32 @@ router.post("/filter", async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
 
-    res.json({ meetings: data });
+    // Add owner_name to meetings for proper display
+    const meetingsWithOwner = data.map(meeting => ({
+      ...meeting,
+      owner_name: meeting.users?.name || 'Unknown'
+    }));
+
+    res.json({ meetings: meetingsWithOwner });
 
   } catch (err) {
     res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// Get all meetings count for admin dashboard
+router.get("/count", async (req, res) => {
+  try {
+    const { count, error } = await supabase
+      .from("meetings")
+      .select("*", { count: "exact", head: true });
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    res.json({ meetings: count || 0 });
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
   }
 });
 

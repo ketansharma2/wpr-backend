@@ -12,7 +12,7 @@ router.post("/filter", async (req, res) => {
       task_type,
       status,
       category,
-      target_user_id, // specific member (mandatory)
+      target_user_id, // specific member (optional - use 'all' for all members)
       custom_date
     } = req.body;
 
@@ -67,13 +67,28 @@ router.post("/filter", async (req, res) => {
 
     // ---------------------- FILTER BUILDER ----------------------
     const applyFilters = (table) => {
-      let q = supabase.from(table).select("*");
+      let q;
 
-      // Always filter by the specified target user
       if (table === "self_tasks") {
-        q = q.eq("user_id", target_user_id);
+        q = supabase.from(table).select(`
+          *,
+          users(name)
+        `);
+        // Filter by target user only if specified (not 'all' or null)
+        if (target_user_id && target_user_id !== 'all') {
+          q = q.eq("user_id", target_user_id);
+        }
+        // If target_user_id is 'all' or null, don't filter by user (fetch all users' tasks)
       } else {
-        q = q.eq("assigned_to", target_user_id);
+        q = supabase.from(table).select(`
+          *,
+          users!assigned_to(name)
+        `);
+        // Filter by target user only if specified (not 'all' or null)
+        if (target_user_id && target_user_id !== 'all') {
+          q = q.eq("assigned_to", target_user_id);
+        }
+        // If target_user_id is 'all' or null, don't filter by user (fetch all users' tasks)
       }
 
       if (startDate && endDate) {
@@ -137,6 +152,32 @@ router.post("/filter", async (req, res) => {
     res.json(response);
 
   } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get all tasks count for admin dashboard
+router.get("/count", async (req, res) => {
+  try {
+    // Get count from self_tasks table
+    const { count: selfTasksCount, error: selfError } = await supabase
+      .from("self_tasks")
+      .select("*", { count: "exact", head: true });
+
+    if (selfError) return res.status(400).json({ error: selfError.message });
+
+    // Get count from master_tasks table
+    const { count: masterTasksCount, error: masterError } = await supabase
+      .from("master_tasks")
+      .select("*", { count: "exact", head: true });
+
+    if (masterError) return res.status(400).json({ error: masterError.message });
+
+    res.json({
+      tasks: (selfTasksCount || 0) + (masterTasksCount || 0)
+    });
+
+  } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
 });

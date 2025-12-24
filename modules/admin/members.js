@@ -6,7 +6,7 @@ const auth = require("../auth/authMiddleware");
 // Add new member
 router.post("/add", async (req, res) => {
   try {
-    const { email, password, name, dept, role, user_type } = req.body;
+    const { email, password, name, dept, designation, role, user_type } = req.body;
 
     // Validate required fields
     if (!email || !password || !name || !dept || !role || !user_type) {
@@ -48,8 +48,8 @@ router.post("/add", async (req, res) => {
           name,
           email,
           dept,
-          role,
-          user_type
+          role: designation,      // designation goes to role field
+          user_type: role         // user_type goes to user_type field
         }
       ]);
 
@@ -81,7 +81,7 @@ router.post("/add", async (req, res) => {
 router.put("/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    const { name, email, dept, role, user_type } = req.body;
+    const { name, email, dept, designation, role, user_type } = req.body;
 
     const { data, error } = await supabase
       .from("users")
@@ -89,8 +89,8 @@ router.put("/:userId", async (req, res) => {
         name,
         email,
         dept,
-        role,
-        user_type
+        role: designation,      // designation goes to role field
+        user_type: role         // user_type goes to user_type field
       })
       .eq("user_id", userId)
       .select();
@@ -99,6 +99,30 @@ router.put("/:userId", async (req, res) => {
 
     res.json({
       message: "Member updated successfully",
+      member: data[0]
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Delete member
+router.delete("/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const { data, error } = await supabase
+      .from("users")
+      .delete()
+      .eq("user_id", userId)
+      .select();
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    res.json({
+      message: "Member deleted successfully",
       member: data[0]
     });
 
