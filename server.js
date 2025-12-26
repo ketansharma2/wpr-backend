@@ -6,8 +6,11 @@ const reportsDownloadRoutes = require("./modules/reportsdownload");
 require("dotenv").config();
 const app = express();
 
-// Enable CORS for all routes
-app.use(cors());
+// Enable CORS for specific origins
+app.use(cors({
+  origin: ['https://wpr-maven.vercel.app', 'http://localhost:3000'],
+  credentials: true
+}));
 
 app.use(express.json());
 app.use("/tasks", require("./modules/tasks"));
