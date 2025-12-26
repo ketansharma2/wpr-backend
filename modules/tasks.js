@@ -146,23 +146,66 @@ router.post("/create", async (req, res) => {
       time,
       task_type,
       status,
-      file_link
+      file_link,
+      remarks
     } = req.body;
 
-    const { data, error } = await supabase
+    // Check if task_name already exists for user_id
+    const { data: existing } = await supabase
       .from("self_tasks")
-      .insert([
-        {
-          user_id,
+      .select("*")
+      .eq("user_id", user_id)
+      .eq("task_name", task_name)
+      .single();
+
+    let data, error;
+    if (existing) {
+      // Save existing to history
+      await supabase
+        .from("task_history")
+        .insert({
+          task_id: existing.task_id,
+          task_name: existing.task_name,
+          user_id: existing.user_id,
+          history_date: existing.date,
+          time_spent: existing.time,
+          remarks: existing.remarks,
+          status: existing.status,
+          created_by: existing.user_id,
+        });
+
+      // Update the existing task with new data
+      ({ data, error } = await supabase
+        .from("self_tasks")
+        .update({
           date,
           timeline,
-          task_name,
           time,
           task_type,
           status,
-          file_link
-        }
-      ]).select();
+          file_link,
+          remarks
+        })
+        .eq("task_id", existing.task_id)
+        .select());
+    } else {
+      // Insert new task
+      ({ data, error } = await supabase
+        .from("self_tasks")
+        .insert([
+          {
+            user_id,
+            date,
+            timeline,
+            task_name,
+            time,
+            task_type,
+            status,
+            file_link,
+            remarks
+          }
+        ]).select());
+    }
 
     if (error) return res.status(400).json({ error: error.message });
 
@@ -176,25 +219,11 @@ router.post("/create", async (req, res) => {
   }
 });
 
-//update tasks 
-router.put("/:taskId", async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const {
-      user_id,
-      date,
-      timeline,
-      task_name,
-      time,
-      task_type,
-      status,
-      file_link
-    } = req.body;
-
-    // Update row
-    const { data, error } = await supabase
-      .from("self_tasks")
-      .update({
+  //update tasks
+  router.put("/:taskId", async (req, res) => {
+    try {
+      const { taskId } = req.params;
+      const {
         user_id,
         date,
         timeline,
@@ -202,23 +231,61 @@ router.put("/:taskId", async (req, res) => {
         time,
         task_type,
         status,
-        file_link
-      })
-      .eq("task_id", taskId)        // match by task id
-      .select();                   // return updated row
+        file_link,
+        remarks
+      } = req.body;
 
-    if (error) return res.status(400).json({ error: error.message });
+      // Save current version to history
+      const { data: currentTask } = await supabase
+        .from("self_tasks")
+        .select("*")
+        .eq("task_id", taskId)
+        .single();
 
-    res.json({
-      message: "Task updated successfully",
-      task: data[0]
-    });
+      if (currentTask) {
+        await supabase
+          .from("task_history")
+          .insert({
+            task_id: currentTask.task_id,
+            task_name: currentTask.task_name,
+            user_id: currentTask.user_id,
+            history_date: currentTask.date,
+            time_spent: currentTask.time,
+            remarks: currentTask.remarks,
+            status: currentTask.status,
+            created_by: currentTask.user_id,
+          });
+      }
 
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
+      // Update row
+      const { data, error } = await supabase
+        .from("self_tasks")
+        .update({
+          user_id,
+          date,
+          timeline,
+          task_name,
+          time,
+          task_type,
+          status,
+          file_link,
+          remarks
+        })
+        .eq("task_id", taskId)        // match by task id
+        .select();                   // return updated row
+
+      if (error) return res.status(400).json({ error: error.message });
+
+      res.json({
+        message: "Task updated successfully",
+        task: data[0]
+      });
+
+    } catch (err) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
 
 
 
-module.exports = router;
+  module.exports = router;

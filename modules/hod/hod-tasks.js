@@ -202,23 +202,66 @@ router.post("/create", async (req, res) => {
       time,
       task_type,
       status,
-      file_link
+      file_link,
+      remarks
     } = req.body;
 
-    const { data, error } = await supabase
+    // Check if task_name already exists for user_id
+    const { data: existing } = await supabase
       .from("self_tasks")
-      .insert([
-        {
-          user_id,
+      .select("*")
+      .eq("user_id", user_id)
+      .eq("task_name", task_name)
+      .single();
+
+    let data, error;
+    if (existing) {
+      // Save existing to history
+      await supabase
+        .from("task_history")
+        .insert({
+          task_id: existing.task_id,
+          task_name: existing.task_name,
+          user_id: existing.user_id,
+          history_date: existing.date,
+          time_spent: existing.time,
+          remarks: existing.remarks,
+          status: existing.status,
+          created_by: existing.user_id,
+        });
+
+      // Update the existing task with new data
+      ({ data, error } = await supabase
+        .from("self_tasks")
+        .update({
           date,
           timeline,
-          task_name,
           time,
           task_type,
           status,
-          file_link
-        }
-      ]).select();
+          file_link,
+          remarks
+        })
+        .eq("task_id", existing.task_id)
+        .select());
+    } else {
+      // Insert new task
+      ({ data, error } = await supabase
+        .from("self_tasks")
+        .insert([
+          {
+            user_id,
+            date,
+            timeline,
+            task_name,
+            time,
+            task_type,
+            status,
+            file_link,
+            remarks
+          }
+        ]).select());
+    }
 
     if (error) return res.status(400).json({ error: error.message });
 
