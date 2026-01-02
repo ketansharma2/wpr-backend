@@ -131,7 +131,14 @@ router.post("/data", async (req, res) => {
       total_tasks: monthlyTasks.length,
       completed: 0,
       in_progress: 0,
-      not_started: 0
+      not_started: 0,
+      on_hold: 0,
+      cancelled: 0,
+      self_tasks: 0,
+      assigned_tasks: 0,
+      fixed_tasks: 0,
+      variable_tasks: 0,
+      hod_assigned_tasks: 0
     };
 
     monthlyTasks.forEach(task => {
@@ -142,8 +149,82 @@ router.post("/data", async (req, res) => {
         stats.in_progress++;
       } else if (status === 'pending' || status === 'not started') {
         stats.not_started++;
+      } else if (status === 'on hold') {
+        stats.on_hold++;
+      } else if (status === 'cancelled') {
+        stats.cancelled++;
+      }
+
+      // Count self vs assigned tasks
+      // Note: This assumes self_tasks table contains only self tasks
+      stats.self_tasks++;
+
+      // Count task types
+      const taskType = task.task_type?.toLowerCase();
+      if (taskType === 'fixed') {
+        stats.fixed_tasks++;
+      } else if (taskType === 'variable') {
+        stats.variable_tasks++;
+      } else if (taskType === 'hod assigned') {
+        stats.hod_assigned_tasks++;
       }
     });
+
+    // Get assigned tasks count from master_tasks table
+    if (view_type === 'self') {
+      const { data: assignedTasks, error: assignedError } = await supabase
+        .from("master_tasks")
+        .select("status")
+        .eq("assigned_to", user_id)
+        .gte("date", startDate)
+        .lte("date", endDate);
+
+      if (!assignedError && assignedTasks) {
+        stats.assigned_tasks = assignedTasks.length;
+        // Add assigned tasks to status counts
+        assignedTasks.forEach(task => {
+          const status = task.status?.toLowerCase();
+          if (status === 'completed') {
+            stats.completed++;
+          } else if (status === 'in-progress') {
+            stats.in_progress++;
+          } else if (status === 'pending' || status === 'not started') {
+            stats.not_started++;
+          } else if (status === 'on hold') {
+            stats.on_hold++;
+          } else if (status === 'cancelled') {
+            stats.cancelled++;
+          }
+        });
+      }
+    } else if (view_type === 'all') {
+      // For 'all' view, count all assigned tasks in the department
+      const { data: allAssignedTasks, error: allAssignedError } = await supabase
+        .from("master_tasks")
+        .select("status")
+        .in("assigned_to", targetUserIds)
+        .gte("date", startDate)
+        .lte("date", endDate);
+
+      if (!allAssignedError && allAssignedTasks) {
+        stats.assigned_tasks = allAssignedTasks.length;
+        // Add assigned tasks to status counts
+        allAssignedTasks.forEach(task => {
+          const status = task.status?.toLowerCase();
+          if (status === 'completed') {
+            stats.completed++;
+          } else if (status === 'in-progress') {
+            stats.in_progress++;
+          } else if (status === 'pending' || status === 'not started') {
+            stats.not_started++;
+          } else if (status === 'on hold') {
+            stats.on_hold++;
+          } else if (status === 'cancelled') {
+            stats.cancelled++;
+          }
+        });
+      }
+    }
 
     // Process today's data
     const todayTasks = ((todayTasksResult.data || []).map(task => ({

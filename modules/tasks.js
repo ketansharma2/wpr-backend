@@ -151,28 +151,36 @@ router.post("/create", async (req, res) => {
     } = req.body;
 
     // Check if task_name already exists for user_id
-    const { data: existing } = await supabase
+    const { data: existingTasks } = await supabase
       .from("self_tasks")
       .select("*")
       .eq("user_id", user_id)
       .eq("task_name", task_name)
-      .single();
+      .order("date", { ascending: false });
 
     let data, error;
-    if (existing) {
-      // Save existing to history
-      await supabase
-        .from("task_history")
-        .insert({
-          task_id: existing.task_id,
-          task_name: existing.task_name,
-          user_id: existing.user_id,
-          history_date: existing.date,
-          time_spent: existing.time,
-          remarks: existing.remarks,
-          status: existing.status,
-          created_by: existing.user_id,
-        });
+    if (existingTasks && existingTasks.length > 0) {
+      // Use the first existing task (in case of duplicates)
+      const existing = existingTasks[0];
+
+      // Save existing to history (with error handling)
+      try {
+        await supabase
+          .from("task_history")
+          .insert({
+            task_id: existing.task_id,
+            task_name: existing.task_name,
+            user_id: existing.user_id,
+            history_date: existing.date,
+            time_spent: existing.time,
+            remarks: existing.remarks || '',
+            status: existing.status || 'pending',
+            created_by: existing.user_id,
+          });
+      } catch (historyError) {
+        console.error("Failed to save to history:", historyError);
+        // Continue with update even if history fails
+      }
 
       // Update the existing task with new data
       ({ data, error } = await supabase
@@ -182,9 +190,9 @@ router.post("/create", async (req, res) => {
           timeline,
           time,
           task_type,
-          status,
+          status: 'Not Started',
           file_link,
-          remarks
+          remarks: ''
         })
         .eq("task_id", existing.task_id)
         .select());
@@ -235,28 +243,6 @@ router.post("/create", async (req, res) => {
         remarks
       } = req.body;
 
-      // Save current version to history
-      const { data: currentTask } = await supabase
-        .from("self_tasks")
-        .select("*")
-        .eq("task_id", taskId)
-        .single();
-
-      if (currentTask) {
-        await supabase
-          .from("task_history")
-          .insert({
-            task_id: currentTask.task_id,
-            task_name: currentTask.task_name,
-            user_id: currentTask.user_id,
-            history_date: currentTask.date,
-            time_spent: currentTask.time,
-            remarks: currentTask.remarks,
-            status: currentTask.status,
-            created_by: currentTask.user_id,
-          });
-      }
-
       // Update row
       const { data, error } = await supabase
         .from("self_tasks")
@@ -288,4 +274,47 @@ router.post("/create", async (req, res) => {
 
 
 
-  module.exports = router;
+// Get task name suggestions for dropdown
+router.get("/suggestions/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Get Fixed tasks
+    const { data: fixedTasks, error: fixedError } = await supabase
+      .from("self_tasks")
+      .select("task_name, task_type, status, date")
+      .eq("user_id", userId)
+      .eq("task_type", "Fixed");
+
+    if (fixedError) return res.status(400).json({ error: fixedError.message });
+
+    // Get past tasks with status not 'Done'
+    const { data: pastTasks, error: pastError } = await supabase
+      .from("self_tasks")
+      .select("task_name, task_type, status, date")
+      .eq("user_id", userId)
+      .lt("date", today)
+      .neq("status", "Done");
+
+    if (pastError) return res.status(400).json({ error: pastError.message });
+
+    // Combine and remove duplicates by task_name, keeping the most recent by date
+    const allTasks = [...(fixedTasks || []), ...(pastTasks || [])];
+    const uniqueTasks = allTasks
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .reduce((acc, task) => {
+        if (!acc.find(t => t.task_name === task.task_name)) {
+          acc.push(task);
+        }
+        return acc;
+      }, []);
+
+    res.json({ suggestions: uniqueTasks });
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+module.exports = router;

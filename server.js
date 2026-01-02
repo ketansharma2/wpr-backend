@@ -35,6 +35,8 @@ app.use("/admin/meetings", require("./modules/admin/admin-meetings"));
 app.use("/admin/weekly", require("./modules/admin/admin-weekly"));
 app.use("/admin/individual-analytics", require("./modules/admin/admin-individual-analytics"));
 app.use("/admin/dept-analytics", require("./modules/admin/dept-analytics"));
+app.use("/fixed-tasks", require("./modules/fixed-tasks"));
+app.use("/rnr", require("./modules/rnr"));
 app.get("/", (req, res) => {
   res.send("Server is running");
 });

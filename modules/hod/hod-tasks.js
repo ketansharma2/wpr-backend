@@ -207,28 +207,36 @@ router.post("/create", async (req, res) => {
     } = req.body;
 
     // Check if task_name already exists for user_id
-    const { data: existing } = await supabase
+    const { data: existingTasks } = await supabase
       .from("self_tasks")
       .select("*")
       .eq("user_id", user_id)
       .eq("task_name", task_name)
-      .single();
+      .order("date", { ascending: false });
 
     let data, error;
-    if (existing) {
-      // Save existing to history
-      await supabase
-        .from("task_history")
-        .insert({
-          task_id: existing.task_id,
-          task_name: existing.task_name,
-          user_id: existing.user_id,
-          history_date: existing.date,
-          time_spent: existing.time,
-          remarks: existing.remarks,
-          status: existing.status,
-          created_by: existing.user_id,
-        });
+    if (existingTasks && existingTasks.length > 0) {
+      // Use the most recent existing task
+      const existing = existingTasks[0];
+
+      // Save existing to history (with error handling)
+      try {
+        await supabase
+          .from("task_history")
+          .insert({
+            task_id: existing.task_id,
+            task_name: existing.task_name,
+            user_id: existing.user_id,
+            history_date: existing.date,
+            time_spent: existing.time,
+            remarks: existing.remarks,
+            status: existing.status,
+            created_by: existing.user_id,
+          });
+      } catch (historyError) {
+        console.error("Failed to save to history:", historyError);
+        // Continue with update even if history fails
+      }
 
       // Update the existing task with new data
       ({ data, error } = await supabase

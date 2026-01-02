@@ -181,4 +181,26 @@ try {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// Fetch members excluding current user
+router.get("/members", auth, async (req, res) => {
+ try {
+   const currentUserId = req.user.id;
+
+   const { data, error } = await supabase
+     .from("users")
+     .select("user_id, name, email, dept, role, user_type")
+     .neq("user_id", currentUserId)
+     .order("name");
+
+   if (error) return res.status(400).json({ error: error.message });
+
+   res.json({ members: data });
+
+ } catch (err) {
+   console.error(err);
+   res.status(500).json({ error: "Server error" });
+ }
+});
+
 module.exports = router;
