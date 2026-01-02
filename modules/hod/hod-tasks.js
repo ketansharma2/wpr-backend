@@ -99,6 +99,15 @@ router.post("/filter", async (req, res) => {
       endDate = format(last);
     }
 
+    if (date_filter === "all") {
+      let now = new Date();
+      let first = new Date(now.getFullYear(), now.getMonth(), 1);
+      let last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      startDate = format(first);
+      endDate = format(last);
+    }
+
     // ---------------------- FILTER BUILDER ----------------------
     const applyFilters = (table) => {
       let q;
@@ -106,7 +115,7 @@ router.post("/filter", async (req, res) => {
       if (table === "self_tasks") {
         q = supabase.from(table).select(`
           *,
-          users(name)
+          users(user_id, name)
         `);
         if (view_tasks_of === "all") {
           q = q.in("user_id", targetUserIds);
@@ -116,7 +125,7 @@ router.post("/filter", async (req, res) => {
       } else {
         q = supabase.from(table).select(`
           *,
-          users!assigned_by(name)
+          users!assigned_by(user_id, name)
         `);
         if (view_tasks_of === "all") {
           q = q.in("assigned_to", targetUserIds);

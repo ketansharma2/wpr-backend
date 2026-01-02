@@ -98,6 +98,15 @@ router.post("/filter", async (req, res) => {
       endDate = format(last);
     }
 
+    if (date_filter === "all") {
+      let now = new Date();
+      let first = new Date(now.getFullYear(), now.getMonth(), 1);
+      let last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      startDate = format(first);
+      endDate = format(last);
+    }
+
     // ---------- BUILD QUERY ----------
     let query = supabase.from("meetings").select(`
       *,

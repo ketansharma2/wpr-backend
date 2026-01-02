@@ -30,8 +30,10 @@ router.get("/", auth, async (req, res) => {
 // Create a new fixed task
 router.post("/", auth, async (req, res) => {
   try {
-    const user_id = req.user.id;
-      const { task_name, frequency, assigned_by } = req.body;
+    const { task_name, frequency, assigned_by, user_id } = req.body;
+
+    // Use provided user_id or fallback to authenticated user
+    const target_user_id = user_id || req.user.id;
 
     if (!task_name) {
       return res.status(400).json({ error: "task_name is required" });
@@ -40,7 +42,7 @@ router.post("/", auth, async (req, res) => {
     const { data: fixedTask, error } = await supabase
       .from("fixed_tasks")
       .insert({
-        user_id,
+        user_id: target_user_id,
         task_name,
         frequency: frequency || "Daily",
         assigned_by: assigned_by || null

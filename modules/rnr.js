@@ -3,15 +3,20 @@ const supabase = require("../config/supabase");
 const router = express.Router();
 const auth = require("./auth/authMiddleware");
 
-// Get all R&R entries for a user
+// Get all R&R entries for a user (or specific user for HOD)
 router.get("/", auth, async (req, res) => {
   try {
-    const user_id = req.user.id;
+    let targetUserId = req.user.id;
+
+    // Allow HOD and admin to fetch R&R for specific user
+    if (req.query.user_id && (req.user.user_type === 'HOD' || req.user.user_type === 'admin')) {
+      targetUserId = req.query.user_id;
+    }
 
     const { data: rnrEntries, error } = await supabase
       .from("rnr")
       .select("*")
-      .eq("user_id", user_id)
+      .eq("user_id", targetUserId)
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -30,8 +35,10 @@ router.get("/", auth, async (req, res) => {
 // Create a new R&R entry
 router.post("/", auth, async (req, res) => {
   try {
-    const user_id = req.user.id;
-    const { rnr, description, end_goal, timings, guideline, process_limitations } = req.body;
+    const { rnr, description, end_goal, timings, guideline, process_limitations, user_id } = req.body;
+
+    // Use provided user_id or default to authenticated user
+    const target_user_id = user_id || req.user.id;
 
     if (!rnr) {
       return res.status(400).json({ error: "rnr is required" });
@@ -40,7 +47,7 @@ router.post("/", auth, async (req, res) => {
     const { data: rnrEntry, error } = await supabase
       .from("rnr")
       .insert({
-        user_id,
+        user_id: target_user_id,
         rnr,
         description,
         end_goal,
@@ -67,11 +74,13 @@ router.post("/", auth, async (req, res) => {
 // Update an R&R entry
 router.put("/:id", auth, async (req, res) => {
   try {
-    const user_id = req.user.id;
+    const logged_in_user_id = req.user.id;
     const rnr_id = req.params.id;
     const { rnr, description, end_goal, timings, guideline, process_limitations } = req.body;
 
-    const { data: rnrEntry, error } = await supabase
+    // For HOD, allow updating any R&R entry in their department
+    // For regular users, only allow updating their own entries
+    let query = supabase
       .from("rnr")
       .update({
         rnr,
@@ -81,10 +90,13 @@ router.put("/:id", auth, async (req, res) => {
         guideline,
         process_limitations
       })
-      .eq("rnr_id", rnr_id)
-      .eq("user_id", user_id)
-      .select()
-      .single();
+      .eq("rnr_id", rnr_id);
+
+    if (req.user.user_type !== 'HOD') {
+      query = query.eq("user_id", logged_in_user_id);
+    }
+
+    const { data: rnrEntry, error } = await query.select().single();
 
     if (error) {
       console.error("R&R update error:", error);
@@ -106,14 +118,21 @@ router.put("/:id", auth, async (req, res) => {
 // Delete an R&R entry
 router.delete("/:id", auth, async (req, res) => {
   try {
-    const user_id = req.user.id;
+    const logged_in_user_id = req.user.id;
     const rnr_id = req.params.id;
 
-    const { error } = await supabase
+    // For HOD, allow deleting any R&R entry in their department
+    // For regular users, only allow deleting their own entries
+    let query = supabase
       .from("rnr")
       .delete()
-      .eq("rnr_id", rnr_id)
-      .eq("user_id", user_id);
+      .eq("rnr_id", rnr_id);
+
+    if (req.user.user_type !== 'HOD') {
+      query = query.eq("user_id", logged_in_user_id);
+    }
+
+    const { error } = await query;
 
     if (error) {
       console.error("R&R deletion error:", error);
