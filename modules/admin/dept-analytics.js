@@ -69,17 +69,29 @@ router.post("/filter", async (req, res) => {
       masterQuery = masterQuery.in('assigned_to', userIds);
     }
 
-    // Execute queries
-    const [selfRes, masterRes] = await Promise.all([selfQuery, masterQuery]);
+    // Query task types from self_tasks
+    let taskTypeQuery = supabase
+      .from('self_tasks')
+      .select('task_type')
+      .gte('date', date_from)
+      .lte('date', date_to);
 
-    if (selfRes.error || masterRes.error) {
+    if (dept !== 'all' && userIds) {
+      taskTypeQuery = taskTypeQuery.in('user_id', userIds);
+    }
+
+    // Execute queries
+    const [selfRes, masterRes, taskTypeRes] = await Promise.all([selfQuery, masterQuery, taskTypeQuery]);
+
+    if (selfRes.error || masterRes.error || taskTypeRes.error) {
       return res.status(400).json({
-        error: selfRes.error?.message || masterRes.error?.message
+        error: selfRes.error?.message || masterRes.error?.message || taskTypeRes.error?.message
       });
     }
 
     const selfTasks = selfRes.data || [];
     const masterTasks = masterRes.data || [];
+    const taskTypes = taskTypeRes.data || [];
     const allTasks = [...selfTasks, ...masterTasks];
 
     // Calculate counts
@@ -87,10 +99,17 @@ router.post("/filter", async (req, res) => {
     const done = allTasks.filter(task => task.status === 'Done').length;
     const in_progress = allTasks.filter(task => task.status === 'In Progress').length;
     const not_started = allTasks.filter(task => task.status === 'Not Started').length;
+    const cancelled = allTasks.filter(task => task.status === 'Cancelled').length;
+    const on_hold = allTasks.filter(task => task.status === 'On Hold').length;
     const self_tasks = selfTasks.length;
     const assigned_tasks = masterTasks.length;
 
-    console.log(`Dept ${dept}: total=${total_tasks}, done=${done}, in_progress=${in_progress}, not_started=${not_started}`);
+    // Calculate task type counts
+    const fixed = taskTypes.filter(task => task.task_type === 'Fixed').length;
+    const variable = taskTypes.filter(task => task.task_type === 'Variable').length;
+    const hod_assigned = taskTypes.filter(task => task.task_type === 'HOD Assigned').length;
+
+    console.log(`Dept ${dept}: total=${total_tasks}, done=${done}, in_progress=${in_progress}, not_started=${not_started}, cancelled=${cancelled}, on_hold=${on_hold}, fixed=${fixed}, variable=${variable}, hod_assigned=${hod_assigned}`);
 
     // Calculate breakdown
     let response = {
@@ -98,8 +117,13 @@ router.post("/filter", async (req, res) => {
       done,
       in_progress,
       not_started,
+      cancelled,
+      on_hold,
       self_tasks,
-      assigned_tasks
+      assigned_tasks,
+      fixed,
+      variable,
+      hod_assigned
     };
 
     if (dept === 'all') {
@@ -111,6 +135,16 @@ router.post("/filter", async (req, res) => {
         }
       });
       response.dept_breakdown = dept_breakdown;
+
+      // Also include member_breakdown for all users
+      let member_breakdown = {};
+      allTasks.forEach(task => {
+        if (task.users && task.users.name) {
+          const userName = task.users.name;
+          member_breakdown[userName] = (member_breakdown[userName] || 0) + 1;
+        }
+      });
+      response.member_breakdown = member_breakdown;
     } else {
       let member_breakdown = {};
       allTasks.forEach(task => {

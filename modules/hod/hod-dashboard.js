@@ -161,11 +161,11 @@ router.post("/data", async (req, res) => {
 
     monthlyTasks.forEach(task => {
       const status = task.status?.toLowerCase();
-      if (status === 'completed') {
+      if (status === 'done') {
         stats.completed++;
-      } else if (status === 'in-progress') {
+      } else if (status === 'in progress') {
         stats.in_progress++;
-      } else if (status === 'pending' || status === 'not started') {
+      } else if (status === 'not started') {
         stats.not_started++;
       } else if (status === 'on hold') {
         stats.on_hold++;
@@ -189,6 +189,7 @@ router.post("/data", async (req, res) => {
     });
 
     // Get assigned tasks count from master_tasks table
+    let allAssignedTasks = [];
     if (view_type === 'self') {
       const { data: assignedTasks, error: assignedError } = await supabase
         .from("master_tasks")
@@ -198,15 +199,16 @@ router.post("/data", async (req, res) => {
         .lte("date", endDate);
 
       if (!assignedError && assignedTasks) {
+        allAssignedTasks = assignedTasks;
         stats.assigned_tasks = assignedTasks.length;
         // Add assigned tasks to status counts
         assignedTasks.forEach(task => {
           const status = task.status?.toLowerCase();
-          if (status === 'completed') {
+          if (status === 'done') {
             stats.completed++;
-          } else if (status === 'in-progress') {
+          } else if (status === 'in progress') {
             stats.in_progress++;
-          } else if (status === 'pending' || status === 'not started') {
+          } else if (status === 'not started') {
             stats.not_started++;
           } else if (status === 'on hold') {
             stats.on_hold++;
@@ -217,23 +219,24 @@ router.post("/data", async (req, res) => {
       }
     } else if (view_type === 'all') {
       // For 'all' view, count all assigned tasks in the department
-      const { data: allAssignedTasks, error: allAssignedError } = await supabase
+      const { data: assignedTasksData, error: allAssignedError } = await supabase
         .from("master_tasks")
         .select("status")
         .in("assigned_to", targetUserIds)
         .gte("date", startDate)
         .lte("date", endDate);
 
-      if (!allAssignedError && allAssignedTasks) {
-        stats.assigned_tasks = allAssignedTasks.length;
+      if (!allAssignedError && assignedTasksData) {
+        allAssignedTasks = assignedTasksData;
+        stats.assigned_tasks = assignedTasksData.length;
         // Add assigned tasks to status counts
-        allAssignedTasks.forEach(task => {
+        assignedTasksData.forEach(task => {
           const status = task.status?.toLowerCase();
-          if (status === 'completed') {
+          if (status === 'done') {
             stats.completed++;
-          } else if (status === 'in-progress') {
+          } else if (status === 'in progress') {
             stats.in_progress++;
-          } else if (status === 'pending' || status === 'not started') {
+          } else if (status === 'not started') {
             stats.not_started++;
           } else if (status === 'on hold') {
             stats.on_hold++;
@@ -274,6 +277,44 @@ router.post("/data", async (req, res) => {
       return new Date(b.date) - new Date(a.date);
     });
 
+    // Calculate member breakdown for team distribution cards
+    let member_breakdown = {};
+    if (view_type === 'all') {
+      // Fetch all tasks with user joins for member counting
+      const { data: allTasksData, error: allTasksError } = await supabase
+        .from("self_tasks")
+        .select("*, users!user_id(name)")
+        .in("user_id", targetUserIds)
+        .gte("date", startDate)
+        .lte("date", endDate);
+
+      if (!allTasksError && allTasksData) {
+        allTasksData.forEach(task => {
+          if (task.users && task.users.name) {
+            const userName = task.users.name;
+            member_breakdown[userName] = (member_breakdown[userName] || 0) + 1;
+          }
+        });
+      }
+
+      // Also count master tasks (assigned tasks)
+      const { data: allMasterTasksData, error: allMasterError } = await supabase
+        .from("master_tasks")
+        .select("*, users!assigned_to(name)")
+        .in("assigned_to", targetUserIds)
+        .gte("date", startDate)
+        .lte("date", endDate);
+
+      if (!allMasterError && allMasterTasksData) {
+        allMasterTasksData.forEach(task => {
+          if (task.users && task.users.name) {
+            const userName = task.users.name;
+            member_breakdown[userName] = (member_breakdown[userName] || 0) + 1;
+          }
+        });
+      }
+    }
+
     const response = {
       monthly_stats: stats,
       today: {
@@ -282,7 +323,8 @@ router.post("/data", async (req, res) => {
         date: todayStr
       },
       view_type: view_type,
-      target_user_ids: targetUserIds
+      target_user_ids: targetUserIds,
+      member_breakdown: member_breakdown
     };
 
     console.log(`HOD dashboard data for users ${targetUserIds.join(', ')}:`, {
