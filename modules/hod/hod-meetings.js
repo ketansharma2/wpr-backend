@@ -99,12 +99,9 @@ router.post("/filter", async (req, res) => {
     }
 
     if (date_filter === "all") {
-      let now = new Date();
-      let first = new Date(now.getFullYear(), now.getMonth(), 1);
-      let last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-      startDate = format(first);
-      endDate = format(last);
+      // No date filter for "all" - show all time
+      startDate = null;
+      endDate = null;
     }
 
     // ---------- BUILD QUERY ----------

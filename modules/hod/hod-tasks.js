@@ -100,12 +100,9 @@ router.post("/filter", async (req, res) => {
     }
 
     if (date_filter === "all") {
-      let now = new Date();
-      let first = new Date(now.getFullYear(), now.getMonth(), 1);
-      let last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-      startDate = format(first);
-      endDate = format(last);
+      // No date filter for "all" - show all time
+      startDate = null;
+      endDate = null;
     }
 
     // ---------------------- FILTER BUILDER ----------------------
@@ -166,22 +163,68 @@ router.post("/filter", async (req, res) => {
         });
       }
 
+      // Sort self_tasks by date descending, then name ascending
+      const sortedSelfTasks = selfRes.data.sort((a, b) => {
+        const dateCompare = new Date(b.date) - new Date(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        return (a.users?.name || '').localeCompare(b.users?.name || '');
+      });
+
+      // Sort master_tasks: if all view, date ascending then name ascending; else date descending then name ascending
+      let sortedMasterTasks;
+      if (view_tasks_of === "all") {
+        sortedMasterTasks = masterRes.data.sort((a, b) => {
+          const dateCompare = new Date(a.date) - new Date(b.date);
+          if (dateCompare !== 0) return dateCompare;
+          return (a.users?.name || '').localeCompare(b.users?.name || '');
+        });
+      } else {
+        sortedMasterTasks = masterRes.data.sort((a, b) => {
+          const dateCompare = new Date(b.date) - new Date(a.date);
+          if (dateCompare !== 0) return dateCompare;
+          return (a.users?.name || '').localeCompare(b.users?.name || '');
+        });
+      }
+
       response = {
-        self_tasks: selfRes.data,
-        master_tasks: masterRes.data
+        self_tasks: sortedSelfTasks,
+        master_tasks: sortedMasterTasks
       };
     } else if (category === "self") {
       // Fetch only self_tasks
       const { data, error } = await applyFilters("self_tasks");
       if (error) return res.status(400).json({ error: error.message });
 
-      response = { self_tasks: data, master_tasks: [] };
+      // Sort by date descending, then name ascending
+      const sortedData = data.sort((a, b) => {
+        const dateCompare = new Date(b.date) - new Date(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        return (a.users?.name || '').localeCompare(b.users?.name || '');
+      });
+
+      response = { self_tasks: sortedData, master_tasks: [] };
     } else if (category === "assigned") {
       // Fetch only master_tasks
       const { data, error } = await applyFilters("master_tasks");
       if (error) return res.status(400).json({ error: error.message });
 
-      response = { self_tasks: [], master_tasks: data };
+      // Sort: if all view, date ascending then name ascending; else date descending then name ascending
+      let sortedData;
+      if (view_tasks_of === "all") {
+        sortedData = data.sort((a, b) => {
+          const dateCompare = new Date(a.date) - new Date(b.date);
+          if (dateCompare !== 0) return dateCompare;
+          return (a.users?.name || '').localeCompare(b.users?.name || '');
+        });
+      } else {
+        sortedData = data.sort((a, b) => {
+          const dateCompare = new Date(b.date) - new Date(a.date);
+          if (dateCompare !== 0) return dateCompare;
+          return (a.users?.name || '').localeCompare(b.users?.name || '');
+        });
+      }
+
+      response = { self_tasks: [], master_tasks: sortedData };
     } else {
       return res.status(400).json({ error: "Invalid category. Must be 'all', 'self', or 'assigned'" });
     }
