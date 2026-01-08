@@ -37,6 +37,12 @@ app.use("/admin/weekly", require("./modules/admin/admin-weekly"));
 app.use("/admin/rnr", require("./modules/admin/admin-rnr"));
 app.use("/admin/individual-analytics", require("./modules/admin/admin-individual-analytics"));
 app.use("/admin/dept-analytics", require("./modules/admin/dept-analytics"));
+app.use("/sub-admin/users", require("./modules/sub-admin/sub-admin-users"));
+app.use("/sub-admin/tasks", require("./modules/sub-admin/sub-admin-tasks"));
+app.use("/sub-admin/meetings", require("./modules/sub-admin/sub-admin-meetings"));
+app.use("/sub-admin/weekly", require("./modules/sub-admin/sub-admin-weekly"));
+app.use("/sub-admin/analytics", require("./modules/sub-admin/sub-admin-analytics"));
+app.use("/assign", require("./modules/sub-admin/assign"));
 app.use("/fixed-tasks", require("./modules/fixed-tasks"));
 app.use("/rnr", require("./modules/rnr"));
 app.get("/", (req, res) => {

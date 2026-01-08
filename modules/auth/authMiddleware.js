@@ -25,6 +25,7 @@ module.exports = async function (req, res, next) {
     }
 
     req.user = {
+        user_id: data.user.id,
         ...data.user,
         user_type: userData.user_type,
         dept: userData.dept

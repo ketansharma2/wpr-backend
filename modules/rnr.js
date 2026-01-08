@@ -8,8 +8,8 @@ router.get("/", auth, async (req, res) => {
   try {
     let targetUserId = req.user.id;
 
-    // Allow HOD and admin to fetch R&R for specific user
-    if (req.query.user_id && (req.user.user_type === 'HOD' || req.user.user_type === 'admin')) {
+    // Allow HOD, admin, and Sub Admin to fetch R&R for specific user
+    if (req.query.user_id && (req.user.user_type === 'HOD' || req.user.user_type === 'admin' || req.user.user_type === 'Sub Admin')) {
       targetUserId = req.query.user_id;
     }
 
@@ -92,7 +92,7 @@ router.put("/:id", auth, async (req, res) => {
       })
       .eq("rnr_id", rnr_id);
 
-    if (req.user.user_type !== 'HOD') {
+    if (req.user.user_type !== 'HOD' && req.user.user_type !== 'Sub Admin') {
       query = query.eq("user_id", logged_in_user_id);
     }
 
@@ -128,7 +128,7 @@ router.delete("/:id", auth, async (req, res) => {
       .delete()
       .eq("rnr_id", rnr_id);
 
-    if (req.user.user_type !== 'HOD') {
+    if (req.user.user_type !== 'HOD' && req.user.user_type !== 'Sub Admin') {
       query = query.eq("user_id", logged_in_user_id);
     }
 

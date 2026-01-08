@@ -30,6 +30,7 @@ router.post("/", async (req, res) => {
     let redirectTo = "/home";
     if (userData.user_type === "HOD") redirectTo = "/hod/home";
     if (userData.user_type === "Admin") redirectTo = "/admin/home";
+    if (userData.user_type === "Sub Admin") redirectTo = "/sub-admin/home";
 
     // ---------- SEND TOKEN + PROFILE TO FRONTEND ----------
     return res.json({
