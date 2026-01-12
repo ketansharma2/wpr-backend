@@ -272,6 +272,39 @@ router.post("/create", async (req, res) => {
     }
   });
 
+  // Update master tasks
+  router.put("/master/:taskId", async (req, res) => {
+    try {
+      const { taskId } = req.params;
+      const {
+        status,
+        upload_closing,
+        remarks
+      } = req.body;
+
+      // Update row in master_tasks
+      const { data, error } = await supabase
+        .from("master_tasks")
+        .update({
+          status,
+          upload_closing,
+          remarks
+        })
+        .eq("task_id", taskId)        // match by task_id
+        .select();                   // return updated row
+
+      if (error) return res.status(400).json({ error: error.message });
+
+      res.json({
+        message: "Master task updated successfully",
+        task: data[0]
+      });
+
+    } catch (err) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
 
 
 // Get task name suggestions for dropdown
