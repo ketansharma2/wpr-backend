@@ -43,6 +43,7 @@ app.use("/sub-admin/meetings", require("./modules/sub-admin/sub-admin-meetings")
 app.use("/sub-admin/weekly", require("./modules/sub-admin/sub-admin-weekly"));
 app.use("/sub-admin/analytics", require("./modules/sub-admin/sub-admin-analytics"));
 app.use("/sub-admin/dashboard", require("./modules/sub-admin/sub-admin-dashboard"));
+app.use("/update", require("./modules/sub-admin/sub-admin-assign-update"))
 app.use("/assign", require("./modules/sub-admin/assign"));
 app.use("/fixed-tasks", require("./modules/fixed-tasks"));
 app.use("/rnr", require("./modules/rnr"));

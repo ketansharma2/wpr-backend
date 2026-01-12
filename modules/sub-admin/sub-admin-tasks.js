@@ -25,11 +25,10 @@ router.post("/filter", auth, async (req, res) => {
       `)
       .eq('user_id', user_id);
 
-    // Build query for master tasks (tasks assigned by SubAdmin)
+    // Build query for master tasks (tasks assigned to SubAdmin or by SubAdmin depending on context)
     let masterTasksQuery = supabase
       .from('master_tasks')
-      .select('*')
-      .eq('assigned_by', user_id);
+      .select('*');
 
     // Apply filters to both queries
     [selfTasksQuery, masterTasksQuery].forEach(query => {
@@ -101,19 +100,168 @@ router.post("/filter", auth, async (req, res) => {
     let filteredMasterTasks = masterTasksResult.data || [];
 
     // Apply view filter
-    if (view_tasks_of === 'team' && target_user_id) {
-      if (target_user_id === 'all') {
-        // Show all master tasks assigned by SubAdmin
-        filteredSelfTasks = [];
-        // filteredMasterTasks remains all master tasks
+    if (view_tasks_of === 'all') {
+      // Show all team members' self_tasks and ALL master_tasks (regardless of assigned_by)
+      // Get all team member IDs (exclude Admin)
+      const { data: teamMembersData } = await supabase
+        .from('users')
+        .select('user_id')
+        .neq('user_type', 'Admin');
+
+      const teamMemberIds = teamMembersData?.map(u => u.user_id) || [];
+
+      if (teamMemberIds.length > 0) {
+        // Fetch self_tasks for all team members
+        let selfTasksQuery = supabase
+          .from('self_tasks')
+          .select(`
+            *,
+            users!self_tasks_user_id_fkey(name, email)
+          `)
+          .in('user_id', teamMemberIds);
+
+        // Fetch ALL master_tasks (regardless of assigned_by)
+        let masterTasksQuery = supabase
+          .from('master_tasks')
+          .select('*');
+
+        // Apply category filter
+        if (category === 'self') {
+          masterTasksQuery = null; // Don't fetch master tasks
+        } else if (category === 'assigned') {
+          selfTasksQuery = null; // Don't fetch self tasks
+        }
+        // For 'all', fetch both
+
+        let teamSelfTasks = [];
+        let allMasterTasks = [];
+
+        if (selfTasksQuery) {
+          const { data } = await selfTasksQuery;
+          teamSelfTasks = data || [];
+        }
+
+        if (masterTasksQuery) {
+          const { data } = await masterTasksQuery;
+          allMasterTasks = data || [];
+        }
+
+        filteredSelfTasks = teamSelfTasks;
+        filteredMasterTasks = allMasterTasks;
       } else {
-        // Show tasks assigned to specific user
         filteredSelfTasks = [];
-        filteredMasterTasks = filteredMasterTasks.filter(task => task.assigned_to === target_user_id);
+        filteredMasterTasks = [];
+      }
+    } else if (view_tasks_of === 'team' && target_user_id) {
+      if (target_user_id === 'all') {
+        // Show all team members' self_tasks and master_tasks
+        // Get all team member IDs (exclude Admin and current SubAdmin)
+        const { data: teamMembersData } = await supabase
+          .from('users')
+          .select('user_id')
+          .neq('user_type', 'Admin')
+          .neq('user_id', user_id);
+
+        const teamMemberIds = teamMembersData?.map(u => u.user_id) || [];
+
+        if (teamMemberIds.length > 0) {
+          // Fetch self_tasks for all team members
+          let selfTasksQuery = supabase
+            .from('self_tasks')
+            .select(`
+              *,
+              users!self_tasks_user_id_fkey(name, email)
+            `)
+            .in('user_id', teamMemberIds);
+
+          // Fetch master_tasks assigned to team members
+          let masterTasksQuery = supabase
+            .from('master_tasks')
+            .select('*')
+            .in('assigned_to', teamMemberIds);
+
+          // Apply category filter
+          if (category === 'self') {
+            masterTasksQuery = null;
+          } else if (category === 'assigned') {
+            selfTasksQuery = null;
+          }
+
+          let teamSelfTasks = [];
+          let teamMasterTasks = [];
+
+          if (selfTasksQuery) {
+            const { data } = await selfTasksQuery;
+            teamSelfTasks = data || [];
+          }
+
+          if (masterTasksQuery) {
+            const { data } = await masterTasksQuery;
+            teamMasterTasks = data || [];
+          }
+
+          filteredSelfTasks = teamSelfTasks;
+          filteredMasterTasks = teamMasterTasks;
+        } else {
+          filteredSelfTasks = [];
+          filteredMasterTasks = [];
+        }
+      } else {
+        // Show specific user's self_tasks and master_tasks
+        let userSelfTasks = [];
+        let userMasterTasks = [];
+
+        if (category !== 'assigned') {
+          // Fetch the user's self_tasks
+          const { data } = await supabase
+            .from('self_tasks')
+            .select(`
+              *,
+              users!self_tasks_user_id_fkey(name, email)
+            `)
+            .eq('user_id', target_user_id);
+          userSelfTasks = data || [];
+        }
+
+        if (category !== 'self') {
+          // Fetch master_tasks assigned to the user
+          const { data } = await supabase
+            .from('master_tasks')
+            .select('*')
+            .eq('assigned_to', target_user_id);
+          userMasterTasks = data || [];
+        }
+
+        filteredSelfTasks = userSelfTasks;
+        filteredMasterTasks = userMasterTasks;
       }
     } else {
-      // Default: show self tasks only
-      filteredMasterTasks = [];
+      // Default: self view
+      let selfTasks = [];
+      let masterTasks = [];
+
+      if (category === 'self') {
+        // Only self tasks
+        const { data } = await selfTasksQuery;
+        selfTasks = data || [];
+      } else if (category === 'assigned') {
+        // Only master tasks assigned to this user
+        masterTasksQuery = masterTasksQuery.eq('assigned_to', user_id);
+        const { data } = await masterTasksQuery;
+        masterTasks = data || [];
+      } else {
+        // All: self tasks and master tasks assigned to this user
+        masterTasksQuery = masterTasksQuery.eq('assigned_to', user_id);
+        const [selfResult, masterResult] = await Promise.all([
+          selfTasksQuery,
+          masterTasksQuery
+        ]);
+        selfTasks = selfResult.data || [];
+        masterTasks = masterResult.data || [];
+      }
+
+      filteredSelfTasks = selfTasks;
+      filteredMasterTasks = masterTasks;
     }
 
     // Get user details for master tasks

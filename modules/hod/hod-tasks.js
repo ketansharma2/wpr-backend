@@ -290,17 +290,17 @@ router.post("/create", async (req, res) => {
         // Continue with update even if history fails
       }
 
-      // Update the existing task with new data
+      // Update the existing task: preserve name and task_type, reset status/file_link/remarks, update other fields
       ({ data, error } = await supabase
         .from("self_tasks")
         .update({
           date,
           timeline,
           time,
-          task_type,
-          status,
-          file_link,
-          remarks
+          task_type: existing.task_type, // Keep existing task_type
+          status: 'Not Started', // Reset status
+          file_link: '', // Clear file_link
+          remarks: '' // Clear remarks
         })
         .eq("task_id", existing.task_id)
         .select());
@@ -348,7 +348,8 @@ router.put("/:taskId", async (req, res) => {
       time,
       task_type,
       status,
-      file_link
+      file_link,
+      remarks
     } = req.body;
 
     const { data, error } = await supabase
@@ -361,7 +362,8 @@ router.put("/:taskId", async (req, res) => {
         time,
         task_type,
         status,
-        file_link
+        file_link,
+        remarks
       })
       .eq("task_id", taskId)
       .select();
@@ -370,6 +372,50 @@ router.put("/:taskId", async (req, res) => {
 
     res.json({
       message: "Task updated successfully",
+      task: data[0]
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Update assigned task for HOD
+router.put("/assigned/:taskId", async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const {
+      date,
+      timeline,
+      task_name,
+      parameter,
+      end_goal,
+      assignee_remarks,
+      status,
+      upload_closing,
+      remarks
+    } = req.body;
+
+    const { data, error } = await supabase
+      .from("master_tasks")
+      .update({
+        date,
+        timeline,
+        task_name,
+        parameter,
+        end_goal,
+        assignee_remarks,
+        status,
+        upload_closing,
+        remarks
+      })
+      .eq("task_id", taskId)
+      .select();
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    res.json({
+      message: "Assigned task updated successfully",
       task: data[0]
     });
 

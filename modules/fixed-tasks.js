@@ -77,8 +77,7 @@ router.put("/:id", auth, async (req, res) => {
         description,
         default_time,
         default_status,
-        frequency,
-        updated_at: new Date().toISOString()
+        frequency
       })
       .eq("fixed_task_id", fixed_task_id)
       .eq("user_id", user_id)
@@ -192,7 +191,8 @@ router.post("/auto-populate", auth, async (req, res) => {
               date: today,
               timeline: today,
               task_type: 'Fixed',
-              remarks: ''
+              remarks: '',
+              file_link: ''
             })
             .eq("task_id", existing.task_id)
             .select()

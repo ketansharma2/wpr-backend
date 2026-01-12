@@ -5,7 +5,7 @@ const router = express.Router();
 // Get dashboard data for SubAdmin (can view self or team member data)
 router.post("/data", async (req, res) => {
   try {
-    const { user_id, view_type, target_user_id, date_filter = 'today' } = req.body;
+    const { user_id, view_type, target_user_id, date_filter = 'today', from_date, to_date } = req.body;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });
@@ -36,10 +36,15 @@ router.post("/data", async (req, res) => {
     const formatDate = (d) => d.toISOString().split("T")[0];
     const now = new Date();
 
-    // Calculate date range based on date_filter
+    // Calculate date range based on date_filter or custom dates
     let startDate, endDate, todayStr;
 
-    if (date_filter === 'today') {
+    if (from_date && to_date) {
+      // Use custom date range
+      startDate = from_date;
+      endDate = to_date;
+      todayStr = formatDate(now);
+    } else if (date_filter === 'today') {
       todayStr = formatDate(now);
       startDate = todayStr;
       endDate = todayStr;
@@ -227,8 +232,23 @@ router.post("/data", async (req, res) => {
       }
     });
 
-    // Process master tasks for member breakdown (assigned tasks)
+    // Process master tasks for status counts and member breakdown (assigned tasks)
     monthlyMasterTasks.forEach(task => {
+      // Include master task statuses in status counts
+      const status = task.status?.toLowerCase();
+      if (status === 'done') {
+        stats.completed++;
+      } else if (status === 'in progress') {
+        stats.in_progress++;
+      } else if (status === 'not started') {
+        stats.not_started++;
+      } else if (status === 'on hold') {
+        stats.on_hold++;
+      } else if (status === 'cancelled') {
+        stats.cancelled++;
+      }
+
+      // Count per member for assigned tasks
       if (task.assigned_to && stats.member_breakdown.hasOwnProperty(task.assigned_to)) {
         stats.member_breakdown[task.assigned_to]++;
       }
