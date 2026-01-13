@@ -4,7 +4,7 @@ const router = express.Router();
 const auth = require("../auth/authMiddleware");
 
 // Update assigned task - SubAdmin specific endpoint
-router.put("/taskId", auth, async (req, res) => {
+router.put("/:taskId", auth, async (req, res) => {
   try {
     const { taskId } = req.params;
     const {
