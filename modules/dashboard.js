@@ -211,17 +211,69 @@ router.post("/last-working-day-tasks", async (req, res) => {
         return res.status(400).json({ error: selfError.message });
       }
 
-      // For team member dashboard, only show self_tasks (personal tasks)
-      const allTasks = selfTasks || [];
+      // Query task_history for the user on this date
+      const { data: historyTasks, error: historyError } = await supabase
+        .from("task_history")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("history_date", dateStr);
+
+      if (historyError) {
+        console.error("History tasks error:", historyError);
+        return res.status(400).json({ error: historyError.message });
+      }
+
+      // For team member dashboard, show both self_tasks and task_history
+      const allTasks = [...(selfTasks || []), ...(historyTasks || [])];
 
       // If we found tasks on this date, return them
       if (allTasks.length > 0) {
         console.log(`Found ${allTasks.length} tasks for last working day: ${dateStr}`);
 
-        // Prepare tasks array with itemType
-        const tasks = allTasks.map(task => ({
-          ...task,
-          itemType: task.task_id ? 'task' : 'meeting' // self_tasks have task_id, master_tasks have task_id
+        // Prepare tasks array with proper field mapping
+        const tasks = await Promise.all(allTasks.map(async (task) => {
+          if (task.history_date) {
+            // This is a history task - fetch task_type from self_tasks if possible
+            let taskType = 'History'; // fallback
+            if (task.task_id) {
+              try {
+                const { data: selfTask, error } = await supabase
+                  .from("self_tasks")
+                  .select("task_type")
+                  .eq("task_id", task.task_id)
+                  .single();
+                
+                if (!error && selfTask) {
+                  taskType = selfTask.task_type;
+                }
+              } catch (err) {
+                console.error("Error fetching task_type for history task:", err);
+              }
+            }
+
+            return {
+              task_name: task.task_name,
+              date: task.history_date,
+              time_in_mins: task.time_spent,
+              remarks: task.remarks,
+              status: task.status,
+              task_type: taskType,
+              itemType: 'task',
+              file_link: '',
+              timeline: task.history_date,
+              attachments: '',
+              task_id: task.task_id,
+              user_id: task.user_id,
+              created_at: task.created_at || null,
+              updated_at: task.updated_at || null
+            };
+          } else {
+            // This is a self task
+            return {
+              ...task,
+              itemType: task.task_id ? 'task' : 'meeting'
+            };
+          }
         }));
 
         return res.json({
