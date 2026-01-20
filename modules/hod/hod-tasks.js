@@ -119,6 +119,20 @@ router.post("/filter", async (req, res) => {
         } else {
           q = q.eq("user_id", targetUserIds[0]);
         }
+      } else if (table === "task_history") {
+        q = supabase.from(table).select(`
+          *,
+          self_tasks(task_type, users(user_id, name))
+        `);
+        if (view_tasks_of === "all") {
+          q = q.in("user_id", targetUserIds);
+        } else {
+          q = q.eq("user_id", targetUserIds[0]);
+        }
+        // Filter by history_date for task_history
+        if (startDate && endDate) {
+          q = q.gte("history_date", startDate).lte("history_date", endDate);
+        }
       } else {
         q = supabase.from(table).select(`
           *,
@@ -131,13 +145,17 @@ router.post("/filter", async (req, res) => {
         }
       }
 
-      if (startDate && endDate) {
+      if (table !== "task_history" && startDate && endDate) {
         q = q.gte("date", startDate).lte("date", endDate);
       }
 
-      // Task type filter only applies to self_tasks
-      if (table === "self_tasks" && task_type && task_type !== "all") {
-        q = q.eq("task_type", task_type);
+      // Task type filter only applies to self_tasks and task_history
+      if ((table === "self_tasks" || table === "task_history") && task_type && task_type !== "all") {
+        if (table === "task_history") {
+          q = q.eq("self_tasks.task_type", task_type);
+        } else {
+          q = q.eq("task_type", task_type);
+        }
       }
 
       if (status && status !== "all") {
@@ -151,15 +169,22 @@ router.post("/filter", async (req, res) => {
     let response = {};
 
     if (category === "all") {
-      // Fetch both self_tasks and master_tasks
-      const [selfRes, masterRes] = await Promise.all([
+      // Fetch self_tasks, master_tasks, and task_history (only for specific date filters, not "all")
+      const queries = [
         applyFilters("self_tasks"),
         applyFilters("master_tasks")
-      ]);
+      ];
 
-      if (selfRes.error || masterRes.error) {
+      if (date_filter !== "today" && date_filter !== "all") {
+        queries.push(applyFilters("task_history"));
+      }
+
+      const results = await Promise.all(queries);
+      const [selfRes, masterRes, historyRes] = results;
+
+      if (selfRes.error || masterRes.error || (historyRes && historyRes.error)) {
         return res.status(400).json({
-          error: selfRes.error?.message || masterRes.error?.message
+          error: selfRes.error?.message || masterRes.error?.message || historyRes?.error?.message
         });
       }
 
@@ -186,25 +211,74 @@ router.post("/filter", async (req, res) => {
         });
       }
 
+      // Sort and format history tasks
+      let sortedHistoryTasks = [];
+      if (historyRes) {
+        sortedHistoryTasks = historyRes.data.map(item => ({
+          ...item,
+          task_type: item.self_tasks?.task_type || 'Unknown',
+          users: item.self_tasks?.users || { user_id: item.user_id, name: 'Unknown' },
+          date: item.history_date, // Use history_date as the display date
+          time: item.time_spent, // Map time_spent to time for display
+          timeline: null, // Set to null so it shows 'N/A' in the UI
+          itemType: 'history' // Mark as history item
+        })).sort((a, b) => {
+          const dateCompare = new Date(b.history_date) - new Date(a.history_date);
+          if (dateCompare !== 0) return dateCompare;
+          return (a.users?.name || '').localeCompare(b.users?.name || '');
+        });
+      }
+
       response = {
         self_tasks: sortedSelfTasks,
-        master_tasks: sortedMasterTasks
+        master_tasks: sortedMasterTasks,
+        history_tasks: sortedHistoryTasks
       };
     } else if (category === "self") {
-      // Fetch only self_tasks
-      const { data, error } = await applyFilters("self_tasks");
-      if (error) return res.status(400).json({ error: error.message });
+      // Fetch only self_tasks and task_history (for specific date filters, not "all")
+      const queries = [applyFilters("self_tasks")];
+      if (date_filter !== "today" && date_filter !== "all") {
+        queries.push(applyFilters("task_history"));
+      }
+
+      const results = await Promise.all(queries);
+      const [selfRes, historyRes] = results;
+
+      if (selfRes.error || (historyRes && historyRes.error)) {
+        return res.status(400).json({ error: selfRes.error?.message || historyRes?.error?.message });
+      }
 
       // Sort by date descending, then name ascending
-      const sortedData = data.sort((a, b) => {
+      const sortedSelfTasks = selfRes.data.sort((a, b) => {
         const dateCompare = new Date(b.date) - new Date(a.date);
         if (dateCompare !== 0) return dateCompare;
         return (a.users?.name || '').localeCompare(b.users?.name || '');
       });
 
-      response = { self_tasks: sortedData, master_tasks: [] };
+      let sortedHistoryTasks = [];
+      if (historyRes) {
+        sortedHistoryTasks = historyRes.data.map(item => ({
+          ...item,
+          task_type: item.self_tasks?.task_type || 'Unknown',
+          users: item.self_tasks?.users || { user_id: item.user_id, name: 'Unknown' },
+          date: item.history_date,
+          time: item.time_spent, // Map time_spent to time for display
+          timeline: null, // Show 'N/A' for timeline in history tasks
+          itemType: 'history'
+        })).sort((a, b) => {
+          const dateCompare = new Date(b.history_date) - new Date(a.history_date);
+          if (dateCompare !== 0) return dateCompare;
+          return (a.users?.name || '').localeCompare(b.users?.name || '');
+        });
+      }
+
+      response = { 
+        self_tasks: sortedSelfTasks, 
+        master_tasks: [], 
+        history_tasks: sortedHistoryTasks 
+      };
     } else if (category === "assigned") {
-      // Fetch only master_tasks
+      // Fetch only master_tasks (no history for assigned tasks)
       const { data, error } = await applyFilters("master_tasks");
       if (error) return res.status(400).json({ error: error.message });
 
@@ -224,7 +298,7 @@ router.post("/filter", async (req, res) => {
         });
       }
 
-      response = { self_tasks: [], master_tasks: sortedData };
+      response = { self_tasks: [], master_tasks: sortedData, history_tasks: [] };
     } else {
       return res.status(400).json({ error: "Invalid category. Must be 'all', 'self', or 'assigned'" });
     }
@@ -233,7 +307,8 @@ router.post("/filter", async (req, res) => {
       view_tasks_of,
       target_users: targetUserIds.join(', '),
       self_tasks_count: response.self_tasks?.length || 0,
-      master_tasks_count: response.master_tasks?.length || 0
+      master_tasks_count: response.master_tasks?.length || 0,
+      history_tasks_count: response.history_tasks?.length || 0
     });
 
     res.json(response);

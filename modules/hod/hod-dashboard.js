@@ -85,47 +85,71 @@ router.post("/data", async (req, res) => {
       todayStr = formatDate(now);
     }
 
-    // Parallel queries for efficiency
-    const [
-      monthlyStatsResult,
-      todayTasksResult,
-      todayMeetingsResult,
-      pendingTasksResult
-    ] = await Promise.all([
-      // Monthly statistics
-      view_type === 'all' ?
-        supabase
-          .from("self_tasks")
-          .select("status, user_id")
-          .in("user_id", targetUserIds)
-          .gte("date", startDate)
-          .lte("date", endDate)
-        :
-        supabase
-          .from("self_tasks")
-          .select("status")
-          .eq("user_id", targetUserIds[0])
-          .gte("date", startDate)
-          .lte("date", endDate),
-
-      // Today's tasks
+    // Build queries
+    const monthlyStatsQuery = view_type === 'all' ?
       supabase
         .from("self_tasks")
-        .select("*, users(name)")
+        .select("status, user_id")
         .in("user_id", targetUserIds)
         .gte("date", startDate)
-        .lte("date", endDate),
-
-      // Today's meetings
+        .lte("date", endDate)
+      :
       supabase
-        .from("meetings")
-        .select("*, users(name)")
-        .in("user_id", targetUserIds)
+        .from("self_tasks")
+        .select("status")
+        .eq("user_id", targetUserIds[0])
         .gte("date", startDate)
-        .lte("date", endDate),
+        .lte("date", endDate);
 
-      // Pending assigned tasks (for HOD's own view) - removed as not used
-    ]);
+    const todayTasksQuery = supabase
+      .from("self_tasks")
+      .select("*, users(name)")
+      .in("user_id", targetUserIds)
+      .gte("date", startDate)
+      .lte("date", endDate);
+
+    const todayMasterTasksQuery = supabase
+      .from("master_tasks")
+      .select("*, users!assigned_to(name)")
+      .in("assigned_to", targetUserIds)
+      .gte("date", startDate)
+      .lte("date", endDate);
+
+    let todayHistoryTasksQuery = null;
+    if (date_filter !== 'today' && date_filter !== 'all') {
+      todayHistoryTasksQuery = supabase
+        .from("task_history")
+        .select("*, users!task_history_user_id_fkey(name), self_tasks!task_id(task_type, users!user_id(name))")
+        .in("user_id", targetUserIds)
+        .gte("history_date", startDate)
+        .lte("history_date", endDate);
+    }
+
+    const todayMeetingsQuery = supabase
+      .from("meetings")
+      .select("*, users(name)")
+      .in("user_id", targetUserIds)
+      .gte("date", startDate)
+      .lte("date", endDate);
+
+    // Parallel queries for efficiency
+    const queries = [
+      monthlyStatsQuery,
+      todayTasksQuery,
+      todayMasterTasksQuery,
+      todayMeetingsQuery
+    ];
+
+    if (todayHistoryTasksQuery) {
+      queries.splice(1, 0, todayHistoryTasksQuery); // Insert history query after monthly stats
+    }
+
+    const results = await Promise.all(queries);
+    const monthlyStatsResult = results[0];
+    const todayTasksResult = results[todayHistoryTasksQuery ? 2 : 1];
+    const todayMasterResult = results[todayHistoryTasksQuery ? 3 : 2];
+    const todayHistoryResult = todayHistoryTasksQuery ? results[1] : null;
+    const todayMeetingsResult = results[results.length - 1];
 
     // Check for errors
     if (monthlyStatsResult.error) {
@@ -136,6 +160,16 @@ router.post("/data", async (req, res) => {
     if (todayTasksResult.error) {
       console.error("Today tasks error:", todayTasksResult.error);
       return res.status(400).json({ error: todayTasksResult.error.message });
+    }
+
+    if (todayMasterResult.error) {
+      console.error("Today master tasks error:", todayMasterResult.error);
+      return res.status(400).json({ error: todayMasterResult.error.message });
+    }
+
+    if (todayHistoryResult && todayHistoryResult.error) {
+      console.error("Today history tasks error:", todayHistoryResult.error);
+      return res.status(400).json({ error: todayHistoryResult.error.message });
     }
 
     if (todayMeetingsResult.error) {
@@ -173,11 +207,8 @@ router.post("/data", async (req, res) => {
         stats.cancelled++;
       }
 
-      // Count self vs assigned tasks
-      // Note: This assumes self_tasks table contains only self tasks
       stats.self_tasks++;
 
-      // Count task types
       const taskType = task.task_type?.toLowerCase();
       if (taskType === 'fixed') {
         stats.fixed_tasks++;
@@ -201,7 +232,6 @@ router.post("/data", async (req, res) => {
       if (!assignedError && assignedTasks) {
         allAssignedTasks = assignedTasks;
         stats.assigned_tasks = assignedTasks.length;
-        // Add assigned tasks to status counts
         assignedTasks.forEach(task => {
           const status = task.status?.toLowerCase();
           if (status === 'done') {
@@ -218,7 +248,6 @@ router.post("/data", async (req, res) => {
         });
       }
     } else if (view_type === 'all') {
-      // For 'all' view, count all assigned tasks in the department
       const { data: assignedTasksData, error: allAssignedError } = await supabase
         .from("master_tasks")
         .select("status")
@@ -229,7 +258,6 @@ router.post("/data", async (req, res) => {
       if (!allAssignedError && assignedTasksData) {
         allAssignedTasks = assignedTasksData;
         stats.assigned_tasks = assignedTasksData.length;
-        // Add assigned tasks to status counts
         assignedTasksData.forEach(task => {
           const status = task.status?.toLowerCase();
           if (status === 'done') {
@@ -247,19 +275,77 @@ router.post("/data", async (req, res) => {
       }
     }
 
+    // Update stats for history on past dates
+    if (todayHistoryResult && todayHistoryResult.data) {
+      todayHistoryResult.data.forEach(item => {
+        // For status
+        const status = item.status?.toLowerCase();
+        if (status === 'done') {
+          stats.completed++;
+        } else if (status === 'in progress') {
+          stats.in_progress++;
+        } else if (status === 'not started') {
+          stats.not_started++;
+        } else if (status === 'on hold') {
+          stats.on_hold++;
+        } else if (status === 'cancelled') {
+          stats.cancelled++;
+        }
+
+        // For task_type
+        const taskType = item.self_tasks?.task_type?.toLowerCase();
+        if (taskType === 'fixed') {
+          stats.fixed_tasks++;
+        } else if (taskType === 'variable') {
+          stats.variable_tasks++;
+        } else if (taskType === 'hod assigned') {
+          stats.hod_assigned_tasks++;
+        }
+      });
+
+      stats.self_tasks += todayHistoryResult.data.length;
+      stats.total_tasks += todayHistoryResult.data.length;
+    }
+
     // Process today's data
-    const todayTasks = ((todayTasksResult.data || []).map(task => ({
+    let todayTasks = (todayTasksResult.data || []).map(task => ({
       ...task,
       itemType: 'task',
       category: 'self',
       owner_name: task.users?.name || 'Unknown'
-    }))).sort((a, b) => {
-      // For 'all' view, sort by owner name first, then by date
+    }));
+
+    const masterTasks = (todayMasterResult.data || []).map(task => ({
+      ...task,
+      itemType: 'task',
+      category: 'assigned',
+      owner_name: task.users?.name || 'Unknown'
+    }));
+
+    todayTasks = [...todayTasks, ...masterTasks];
+
+    // Add history tasks if applicable
+    if (todayHistoryResult && todayHistoryResult.data) {
+      const historyTasks = todayHistoryResult.data.map(item => ({
+        ...item,
+        task_type: item.self_tasks?.task_type || 'Unknown',
+        users: item.self_tasks?.users || { user_id: item.user_id, name: 'Unknown' },
+        date: item.history_date,
+        time: item.time_spent,
+        timeline: null,
+        itemType: 'task',
+        category: 'self',
+        owner_name: item.users?.name || item.self_tasks?.users?.name || 'Unknown'
+      }));
+      todayTasks = [...todayTasks, ...historyTasks];
+    }
+
+    // Sort tasks
+    todayTasks.sort((a, b) => {
       if (view_type === 'all') {
         const nameCompare = (a.owner_name || '').localeCompare(b.owner_name || '');
         if (nameCompare !== 0) return nameCompare;
       }
-      // Sort by date descending (newest first)
       return new Date(b.date) - new Date(a.date);
     });
 
@@ -268,51 +354,22 @@ router.post("/data", async (req, res) => {
       itemType: 'meeting',
       owner_name: meeting.users?.name || 'Unknown'
     }))).sort((a, b) => {
-      // For 'all' view, sort by owner name first, then by date
       if (view_type === 'all') {
         const nameCompare = (a.owner_name || '').localeCompare(b.owner_name || '');
         if (nameCompare !== 0) return nameCompare;
       }
-      // Sort by date descending (newest first)
       return new Date(b.date) - new Date(a.date);
     });
 
     // Calculate member breakdown for team distribution cards
     let member_breakdown = {};
     if (view_type === 'all') {
-      // Fetch all tasks with user joins for member counting
-      const { data: allTasksData, error: allTasksError } = await supabase
-        .from("self_tasks")
-        .select("*, users!user_id(name)")
-        .in("user_id", targetUserIds)
-        .gte("date", startDate)
-        .lte("date", endDate);
-
-      if (!allTasksError && allTasksData) {
-        allTasksData.forEach(task => {
-          if (task.users && task.users.name) {
-            const userName = task.users.name;
-            member_breakdown[userName] = (member_breakdown[userName] || 0) + 1;
-          }
-        });
-      }
-
-      // Also count master tasks (assigned tasks)
-      const { data: allMasterTasksData, error: allMasterError } = await supabase
-        .from("master_tasks")
-        .select("*, users!assigned_to(name)")
-        .in("assigned_to", targetUserIds)
-        .gte("date", startDate)
-        .lte("date", endDate);
-
-      if (!allMasterError && allMasterTasksData) {
-        allMasterTasksData.forEach(task => {
-          if (task.users && task.users.name) {
-            const userName = task.users.name;
-            member_breakdown[userName] = (member_breakdown[userName] || 0) + 1;
-          }
-        });
-      }
+      todayTasks.forEach(task => {
+        const userName = task.owner_name;
+        if (userName && userName !== 'Unknown') {
+          member_breakdown[userName] = (member_breakdown[userName] || 0) + 1;
+        }
+      });
     }
 
     const response = {
@@ -341,5 +398,177 @@ router.post("/data", async (req, res) => {
   }
 });
 
+// Get tasks and meetings for HOD
+router.post("/tasks/filter", async (req, res) => {
+  try {
+    const { user_id, view_tasks_of, target_user_id, date_filter = 'all', task_type = 'all', status = 'all', category = 'all' } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: "user_id is required" });
+    }
+
+    // Determine whose data to fetch
+    let targetUserIds = [];
+    if (view_tasks_of === 'all') {
+      // Get all team members in the department
+      const { data: hodData, error: hodError } = await supabase
+        .from("users")
+        .select("dept")
+        .eq("user_id", user_id)
+        .single();
+
+      if (hodError) {
+        console.error("HOD data error:", hodError);
+        return res.status(400).json({ error: hodError.message });
+      }
+
+      const { data: teamMembers, error: teamError } = await supabase
+        .from("users")
+        .select("user_id")
+        .eq("dept", hodData.dept);
+
+      if (teamError) {
+        console.error("Team members error:", teamError);
+        return res.status(400).json({ error: teamError.message });
+      }
+
+      targetUserIds = teamMembers.map(member => member.user_id);
+    } else {
+      targetUserIds = [view_tasks_of === 'team' && target_user_id ? target_user_id : user_id];
+    }
+
+    console.log(`Fetching HOD tasks for ${view_tasks_of} view, target users: ${targetUserIds.join(', ')}, date_filter: ${date_filter}`);
+
+    const formatDate = (d) => d.toISOString().split("T")[0];
+    const now = new Date();
+
+    // Calculate date range based on date_filter
+    let startDate, endDate;
+
+    if (date_filter === 'today') {
+      const today = formatDate(now);
+      startDate = today;
+      endDate = today;
+    } else if (date_filter === 'yesterday') {
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatDate(yesterday);
+      startDate = yesterdayStr;
+      endDate = yesterdayStr;
+    } else if (date_filter === 'past_week') {
+      const dayOfWeek = now.getDay();
+      const daysToLastSaturday = (dayOfWeek + 1) % 7;
+      const lastSaturday = new Date(now);
+      lastSaturday.setDate(now.getDate() - daysToLastSaturday);
+      const lastMonday = new Date(lastSaturday);
+      lastMonday.setDate(lastSaturday.getDate() - 5);
+      startDate = formatDate(lastMonday);
+      endDate = formatDate(lastSaturday);
+    } else if (date_filter === 'past_month') {
+      const monthAgo = new Date(now);
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      startDate = formatDate(monthAgo);
+      endDate = formatDate(now);
+    } else {
+      // 'all' or default - use current month
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      startDate = formatDate(startOfMonth);
+      endOfMonth = formatDate(endOfMonth);
+    }
+
+    // Build queries
+    let selfTasksQuery = supabase
+      .from("self_tasks")
+      .select("*, users(name)")
+      .in("user_id", targetUserIds)
+      .gte("date", startDate)
+      .lte("date", endDate);
+
+    let masterTasksQuery = supabase
+      .from("master_tasks")
+      .select("*, users!assigned_to(name)")
+      .in("assigned_to", targetUserIds)
+      .gte("date", startDate)
+      .lte("date", endDate);
+
+    let historyTasksQuery = null;
+    if (date_filter !== 'today' && date_filter !== 'all') {
+      historyTasksQuery = supabase
+        .from("task_history")
+        .select("*, users!task_history_user_id_fkey(name), self_tasks!task_id(task_type, users!user_id(name))")
+        .in("user_id", targetUserIds)
+        .gte("history_date", startDate)
+        .lte("history_date", endDate);
+    }
+
+    // Execute queries
+    const [selfTasksResult, masterTasksResult, historyTasksResult] = await Promise.all([
+      selfTasksQuery,
+      masterTasksQuery,
+      historyTasksQuery || Promise.resolve({ data: null })
+    ]);
+
+    // Check for errors
+    if (selfTasksResult.error) {
+      console.error("Self tasks error:", selfTasksResult.error);
+      return res.status(400).json({ error: selfTasksResult.error.message });
+    }
+
+    if (masterTasksResult.error) {
+      console.error("Master tasks error:", masterTasksResult.error);
+      return res.status(400).json({ error: masterTasksResult.error.message });
+    }
+
+    if (historyTasksResult && historyTasksResult.error) {
+      console.error("History tasks error:", historyTasksResult.error);
+      return res.status(400).json({ error: historyTasksResult.error.message });
+    }
+
+    // Process self_tasks
+    const self_tasks = (selfTasksResult.data || []).map(task => ({
+      ...task,
+      itemType: 'task',
+      category: 'self',
+      owner_name: task.users?.name || 'Unknown'
+    }));
+
+    // Process master_tasks
+    const master_tasks = (masterTasksResult.data || []).map(task => ({
+      ...task,
+      itemType: 'task',
+      category: 'assigned',
+      owner_name: task.users?.name || 'Unknown'
+    }));
+
+    // Process history_tasks
+    const history_tasks = historyTasksResult.data ? historyTasksResult.data.map(item => ({
+      ...item,
+      task_type: item.task_type || item.self_tasks?.task_type || 'Unknown',
+      user_id: item.self_tasks?.users?.user_id || item.user_id,
+      users: item.self_tasks?.users || { user_id: item.user_id, name: 'Unknown' },
+      date: item.history_date,
+      time: item.time_spent,
+      timeline: null,
+      itemType: 'task',
+      category: 'self',
+      owner_name: item.users?.name || item.self_tasks?.users?.name || 'Unknown'
+    })) : [];
+
+    const response = {
+      self_tasks,
+      master_tasks,
+      history_tasks
+    };
+
+    console.log(`HOD tasks fetched: self ${self_tasks.length}, master ${master_tasks.length}, history ${history_tasks.length}`);
+
+    res.json(response);
+
+  } catch (error) {
+    console.error("HOD tasks filter error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 module.exports = router;
