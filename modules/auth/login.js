@@ -37,8 +37,8 @@ router.post("/", async (req, res) => {
         message: "Login successful",
         user: data.user,
         profile: userData,
-        token: data.session.access_token,        // 🔥 required
-        refreshToken: data.session.refresh_token, // optional but useful
+        token: data.session.access_token,        
+        refreshToken: data.session.refresh_token, 
         redirectTo
     });
 });

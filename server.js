@@ -27,6 +27,7 @@ app.use("/hod/reports", require("./modules/hod/hod-download"));
 app.use("/hod/fixed-tasks", require("./modules/hod/hod-fixed-tasks"));
 
 app.use("/login", require("./modules/auth/login"));
+app.use("/refresh", require("./modules/auth/refresh"));
 app.use("/weekly", require("./modules/weekly"));
 app.use("/reports", require("./modules/reportsdownload"));
 app.use("/admin/members", require("./modules/admin/members"));
