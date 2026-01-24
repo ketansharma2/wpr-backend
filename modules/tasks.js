@@ -394,4 +394,51 @@ router.post("/history", async (req, res) => {
   }
 });
 
+// Get individual task by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: "Task ID is required" });
+    }
+
+    // Try to find in self_tasks first
+    let { data: task, error } = await supabase
+      .from("self_tasks")
+      .select("*")
+      .eq("task_id", id)
+      .single();
+
+    if (!task) {
+      // If not found in self_tasks, try master_tasks
+      const masterResult = await supabase
+        .from("master_tasks")
+        .select("*, assigned_by_user:users!assigned_by(name)")
+        .eq("task_id", id)
+        .single();
+      
+      task = masterResult.data;
+      error = masterResult.error;
+    }
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+      console.error("Error fetching task:", error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (!task) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    res.json({ task });
+
+  } catch (err) {
+    console.error("Server error fetching task:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 module.exports = router;
+
+

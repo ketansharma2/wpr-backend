@@ -75,8 +75,7 @@ router.put("/:id", auth, async (req, res) => {
       .update({
         task_name,
         description,
-        default_time,
-        default_status,
+        assigned_by,
         frequency
       })
       .eq("fixed_task_id", fixed_task_id)

@@ -14,8 +14,13 @@ app.use(cors({
 
 app.use(express.json());
 app.use("/tasks", require("./modules/tasks"));
+app.use("/subtasks", require("./modules/subtasks"));
+app.use("/inputs", require("./modules/inputs"));
 app.use("/meetings", require("./modules/meetings"));
+app.use("/task_meetings", require("./modules/task_meetings"));
+app.use("/task_history", require("./modules/task_history"));
 app.use("/dashboard", require("./modules/dashboard"));
+app.use("/role_overview", require("./modules/role_overview"));
 
 
 app.use("/hod/tasks", require("./modules/hod/hod-tasks"));

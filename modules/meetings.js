@@ -81,15 +81,12 @@ router.post("/filter", async (req, res) => {
   }
 });
 
-module.exports = router;
-
-//-------------------------------------------------------------------------------------------------------------
-
 // Create meeting
 router.post("/create", async (req, res) => {
 try {
   console.log('Received meeting create request:', req.body);
-  const {
+  const { 
+    task_id,
     user_id,
     meeting_name,
     date,
@@ -106,6 +103,7 @@ try {
       .from("meetings")
       .insert([
         {
+          task_id,
           user_id,
           meeting_name,
           date,
@@ -132,10 +130,7 @@ try {
   }
 });
 
-
-
 // update meetings
-
 router.put("/:meeting_id", async (req, res) => {
 try {
   const { meeting_id } = req.params;
@@ -182,6 +177,38 @@ try {
   }
 });
 
+// Get individual meeting by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: "Meeting ID is required" });
+    }
+
+    const { data: meeting, error } = await supabase
+      .from("meetings")
+      .select("*")
+      .eq("meeting_id", id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching meeting:", error);
+      return res.status(400).json({ error: error.message });
+    }
+
+    if (!meeting) {
+      return res.status(404).json({ error: "Meeting not found" });
+    }
+
+    res.json({ meeting });
+
+  } catch (err) {
+    console.error("Server error fetching meeting:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // Fetch members excluding current user
 router.get("/members", auth, async (req, res) => {
  try {
@@ -204,3 +231,4 @@ router.get("/members", auth, async (req, res) => {
 });
 
 module.exports = router;
+  
