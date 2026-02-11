@@ -21,6 +21,7 @@ app.use("/task_meetings", require("./modules/task_meetings"));
 app.use("/task_history", require("./modules/task_history"));
 app.use("/dashboard", require("./modules/dashboard"));
 app.use("/role_overview", require("./modules/role_overview"));
+app.use("/projection", require("./modules/projection"));
 
 
 app.use("/hod/tasks", require("./modules/hod/hod-tasks"));
@@ -30,6 +31,7 @@ app.use("/hod/dashboard", require("./modules/hod/hod-dashboard"));
 app.use("/hod/weekly", require("./modules/hod/hod-weekly"));
 app.use("/hod/reports", require("./modules/hod/hod-download"));
 app.use("/hod/fixed-tasks", require("./modules/hod/hod-fixed-tasks"));
+app.use("/hod/monthly-projection", require("./modules/hod/monthly_projection"));
 
 app.use("/login", require("./modules/auth/login"));
 app.use("/refresh", require("./modules/auth/refresh"));
