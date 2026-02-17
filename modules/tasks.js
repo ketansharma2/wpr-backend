@@ -190,9 +190,9 @@ router.post("/create", async (req, res) => {
           timeline,
           time,
           task_type,
-          status: 'Not Started',
+          status,
           file_link,
-          remarks: ''
+          remarks
         })
         .eq("task_id", existing.task_id)
         .select());
