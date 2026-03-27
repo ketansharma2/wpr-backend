@@ -3,37 +3,33 @@ const supabase = require("../../config/supabase");
 const router = express.Router();
 const auth = require("../auth/authMiddleware");
 
-// Filter weekly tasks for admin
 router.post("/filter", auth, async (req, res) => {
   try {
-    console.log('Admin weekly filter request received:', req.body);
     let {
       from_date,
       to_date,
-      task_type = 'all', // default to 'all' if not provided
-      status = 'all', // default to 'all' if not provided
-      category = 'all', // default to 'all' if not provided
-      target_user_id // specific member (optional - use 'all' for all members)
+      task_type = "all",
+      status = "all",
+      category = "all",
+      target_user_id
     } = req.body;
 
-    // If dates not provided, default to current week (Monday to Saturday)
+    // ---------------- DATE DEFAULT ----------------
     if (!from_date || !to_date) {
       const today = new Date();
-      const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+      const day = today.getDay();
 
-      // Calculate Monday of current week
       const monday = new Date(today);
-      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+      monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
 
-      // Calculate Saturday of current week
       const saturday = new Date(monday);
       saturday.setDate(monday.getDate() + 5);
 
-      from_date = monday.toISOString().split('T')[0];
-      to_date = saturday.toISOString().split('T')[0];
+      from_date = monday.toISOString().split("T")[0];
+      to_date = saturday.toISOString().split("T")[0];
     }
 
-    // ---------------------- FILTER BUILDER ----------------------
+    // ---------------- FILTER BUILDER ----------------
     const applyFilters = (table) => {
       let q;
 
@@ -42,44 +38,41 @@ router.post("/filter", auth, async (req, res) => {
           *,
           users(name)
         `);
-        // Filter by target user only if specified (not 'all' or null)
-        if (target_user_id && target_user_id !== 'all') {
+
+        if (target_user_id && target_user_id !== "all") {
           q = q.eq("user_id", target_user_id);
         }
-        // If target_user_id is 'all' or null, don't filter by user (fetch all users' tasks)
+
       } else {
         q = supabase.from(table).select(`
           *,
           assigned_to_user:users!assigned_to(name),
           assigned_by_user:users!assigned_by(name)
         `);
-        // Filter by target user only if specified (not 'all' or null)
-        if (target_user_id && target_user_id !== 'all') {
+
+        if (target_user_id && target_user_id !== "all") {
           q = q.eq("assigned_to", target_user_id);
         }
-        // If target_user_id is 'all' or null, don't filter by user (fetch all users' tasks)
       }
 
-      // Date range filter
       q = q.gte("date", from_date).lte("date", to_date);
 
-      // Task type filter only applies to self_tasks
-      if (table === "self_tasks" && task_type && task_type !== "all") {
+      if (table === "self_tasks" && task_type !== "all") {
         q = q.eq("task_type", task_type);
       }
 
-      if (status && status !== "all") {
+      if (status !== "all") {
         q = q.eq("status", status);
       }
 
       return q;
     };
 
-    // ---------------------- FETCH BASED ON CATEGORY ----------------------
-    let response = {};
+    // ---------------- FETCH ----------------
+    let selfTasks = [];
+    let masterTasks = [];
 
     if (category === "all") {
-      // Fetch both self_tasks and master_tasks for all/specific users
       const [selfRes, masterRes] = await Promise.all([
         applyFilters("self_tasks"),
         applyFilters("master_tasks")
@@ -91,35 +84,87 @@ router.post("/filter", auth, async (req, res) => {
         });
       }
 
-      response = {
-        self_tasks: selfRes.data,
-        master_tasks: masterRes.data
-      };
+      selfTasks = selfRes.data || [];
+      masterTasks = masterRes.data || [];
+
     } else if (category === "self") {
-      // Fetch only self_tasks
       const { data, error } = await applyFilters("self_tasks");
       if (error) return res.status(400).json({ error: error.message });
 
-      response = { self_tasks: data, master_tasks: [] };
+      selfTasks = data || [];
+
     } else if (category === "assigned") {
-      // Fetch only master_tasks
       const { data, error } = await applyFilters("master_tasks");
       if (error) return res.status(400).json({ error: error.message });
 
-      response = { self_tasks: [], master_tasks: data };
-    } else {
-      return res.status(400).json({ error: "Invalid category. Must be 'all', 'self', or 'assigned'" });
+      masterTasks = data || [];
     }
 
-    console.log('Admin weekly filter response:', {
-      target_user: target_user_id || 'all_users',
-      date_range: `${from_date} to ${to_date}`,
-      self_tasks_count: response.self_tasks?.length || 0,
-      master_tasks_count: response.master_tasks?.length || 0
-    });
+    // ---------------- HISTORY ----------------
+    const selfTaskIds = selfTasks.map(t => t.task_id).filter(Boolean);
 
+    let latestHistoryMap = {};
+    let firstHistoryMap = {};
+    let remarksMap = {};
+    let meetingsMap = {};
+
+    if (selfTaskIds.length > 0) {
+      const { data: historyData } = await supabase
+        .from("task_history")
+        .select("*")
+        .in("task_id", selfTaskIds)
+        .gte("history_date", from_date)
+        .lte("history_date", to_date)
+        .order("history_date", { ascending: false });
+
+      historyData?.forEach(item => {
+        if (!latestHistoryMap[item.task_id]) {
+          latestHistoryMap[item.task_id] = item;
+        }
+
+        firstHistoryMap[item.task_id] = item;
+
+        if (!remarksMap[item.task_id]) remarksMap[item.task_id] = [];
+
+        remarksMap[item.task_id].push(
+          `${item.history_date}: ${item.remarks || "-"}`
+        );
+      });
+
+      const { data: meetingsData } = await supabase
+        .from("meetings")
+        .select("*")
+        .in("task_id", selfTaskIds);
+
+      meetingsData?.forEach(meeting => {
+        if (!meetingsMap[meeting.task_id]) meetingsMap[meeting.task_id] = [];
+        meetingsMap[meeting.task_id].push(meeting);
+      });
+    }
+
+    // ---------------- SELF TASK RESPONSE ----------------
+    const selfTasksWithHistory = selfTasks.map(task => ({
+      ...task,
+      source: "self",
+      start_date: firstHistoryMap[task.task_id]?.history_date || task.date,
+      end_date: latestHistoryMap[task.task_id]?.history_date || null,
+      latest_remarks: latestHistoryMap[task.task_id]?.remarks || null,
+      remarks_between_dates: remarksMap[task.task_id]?.join(" | ") || task.remarks,
+      latest_status: latestHistoryMap[task.task_id]?.status || task.status,
+      latest_time_spent: latestHistoryMap[task.task_id]?.time_spent || null,
+      meeting_details: meetingsMap[task.task_id] || []
+    }));
+
+    // ---------------- MASTER TASK RESPONSE ----------------
+    const masterTasksWithSource = masterTasks.map(task => ({
+      ...task,
+      source: "assigned"
+    }));
+
+    // ---------------- FINAL RESPONSE ----------------
     res.json({
-      ...response,
+      self_tasks: selfTasksWithHistory,
+      master_tasks: masterTasksWithSource,
       date_range: {
         from_date,
         to_date
@@ -127,10 +172,11 @@ router.post("/filter", auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Admin weekly filter error:', error);
+    console.error("Admin weekly filter error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // Get all members for admin weekly filtering dropdown
 router.get("/members", auth, async (req, res) => {
