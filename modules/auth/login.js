@@ -12,7 +12,7 @@ router.post("/", async (req, res) => {
     });
 
     if (error) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.status(400).json({ message: "Invalid credentials" });
     }
 
     // ---------- FETCH USER PROFILE ----------

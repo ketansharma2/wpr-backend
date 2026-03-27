@@ -1,13 +1,15 @@
 const express = require("express");
 const supabase = require("../../config/supabase");
 const router = express.Router();
-
+const auth = require("./../auth/authMiddleware");
+router.use(auth);
 // Filter HOD meetings (self or team)
 router.post("/filter", async (req, res) => {
   try {
     console.log('HOD meetings filter request received:', req.body);
+        let user_id = req.user.id;
+
     const {
-      user_id, // HOD user_id
       view_type, // "self" or "team"
       target_user_id, // for team  view: the team member whose meetings to view
       date_filter,
@@ -143,13 +145,14 @@ router.post("/filter", async (req, res) => {
 // Get team members for meeting viewing dropdown (excluding current HOD)
 router.get("/team-members/:department/:exclude_user_id", async (req, res) => {
   try {
-    const { department, exclude_user_id } = req.params;
+    const { department } = req.params;
+    let user_id = req.user.id;
 
     const { data, error } = await supabase
       .from("users")
       .select("user_id, name, email")
       .eq("dept", department)
-      .neq("user_id", exclude_user_id);
+      .neq("user_id", user_id);
 
     if (error) return res.status(400).json({ error: error.message });
 
@@ -164,8 +167,10 @@ router.get("/team-members/:department/:exclude_user_id", async (req, res) => {
 router.post("/create", async (req, res) => {
   try {
     console.log('meeting create request:', req.body);
+    let user_id = req.user.id;
+
     const {
-      user_id, // HOD user_id
+       // HOD user_id
       meeting_name,
       date,
       dept,
@@ -211,9 +216,9 @@ router.put("/:meeting_id", async (req, res) => {
   try {
     const { meeting_id } = req.params;
     console.log('Received department meeting update request:', req.body);
+      let user_id = req.user.id;
 
     const {
-      user_id,
       meeting_name,
       date,
       dept,

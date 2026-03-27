@@ -6,7 +6,8 @@ const auth = require("../auth/authMiddleware");
 // Get individual user analytics
 router.post("/", auth, async (req, res) => {
   try {
-    const { user_id, from_date, to_date } = req.body;
+    const {  from_date, to_date } = req.body;
+    let user_id = req.user.id;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });

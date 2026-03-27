@@ -2,11 +2,13 @@ const express = require("express");
 const supabase = require("../config/supabase");
 const router = express.Router();
 const auth = require("./auth/authMiddleware");
+router.use(auth);
 
 // Get task statistics for a user (today, yesterday, or current month)
 router.post("/monthly-stats", async (req, res) => {
   try {
-    const { user_id, date_filter } = req.body;
+    const {  date_filter } = req.body;
+    let user_id = req.user.id;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });
@@ -84,7 +86,8 @@ router.post("/monthly-stats", async (req, res) => {
 // Get tasks for a user (today or yesterday)
 router.post("/today-tasks", async (req, res) => {
   try {
-    const { user_id, date_filter } = req.body;
+    const {  date_filter } = req.body;
+    let user_id = req.user.id;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });
@@ -136,7 +139,8 @@ router.post("/today-tasks", async (req, res) => {
 // Get today's meetings for a user
 router.post("/today-meetings", async (req, res) => {
   try {
-    const { user_id } = req.body;
+    // const { user_id } = req.body;
+      let user_id = req.user.id;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });
@@ -181,7 +185,8 @@ router.post("/today-meetings", async (req, res) => {
 // Get last working day's tasks for a user (smart yesterday logic)
 router.post("/last-working-day-tasks", async (req, res) => {
   try {
-    const { user_id } = req.body;
+    // const { user_id } = req.body;
+        let user_id = req.user.id;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });
@@ -200,32 +205,29 @@ router.post("/last-working-day-tasks", async (req, res) => {
       console.log(`Checking date: ${dateStr} for user ${user_id}`);
 
       // Query self_tasks for the user on this date
-      const { data: selfTasks, error: selfError } = await supabase
-        .from("self_tasks")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("date", dateStr);
+     const { data: selfTasks, error: selfError } = await supabase
+  .from("self_tasks")
+  .select("*")
+  .eq("user_id", user_id)
+  .eq("date", dateStr);
 
-      if (selfError) {
-        console.error("Self tasks error:", selfError);
-        return res.status(400).json({ error: selfError.message });
-      }
+const selfTasksWithSource = (selfTasks || []).map(task => ({
+  ...task,
+  source: "self_tasks"
+}));
 
-      // Query task_history for the user on this date
-      const { data: historyTasks, error: historyError } = await supabase
-        .from("task_history")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("history_date", dateStr);
+const { data: historyTasks, error: historyError } = await supabase
+  .from("task_history")
+  .select("*")
+  .eq("user_id", user_id)
+  .eq("history_date", dateStr);
 
-      if (historyError) {
-        console.error("History tasks error:", historyError);
-        return res.status(400).json({ error: historyError.message });
-      }
+const historyTasksWithSource = (historyTasks || []).map(task => ({
+  ...task,
+  source: "task_history"
+}));
 
-      // For team member dashboard, show both self_tasks and task_history
-      const allTasks = [...(selfTasks || []), ...(historyTasks || [])];
-
+const allTasks = [...selfTasksWithSource, ...historyTasksWithSource];
       // If we found tasks on this date, return them
       if (allTasks.length > 0) {
         console.log(`Found ${allTasks.length} tasks for last working day: ${dateStr}`);
@@ -257,6 +259,8 @@ router.post("/last-working-day-tasks", async (req, res) => {
               time_in_mins: task.time_spent,
               remarks: task.remarks,
               status: task.status,
+              source: task.source,
+
               task_type: taskType,
               itemType: 'task',
               file_link: '',
@@ -307,7 +311,8 @@ router.post("/last-working-day-tasks", async (req, res) => {
 // Get meetings for a specific date for a user
 router.post("/meetings-by-date", async (req, res) => {
   try {
-    const { user_id, date } = req.body;
+    const {  date } = req.body;
+    let user_id = req.user.id;
 
     if (!user_id || !date) {
       return res.status(400).json({ error: "user_id and date are required" });

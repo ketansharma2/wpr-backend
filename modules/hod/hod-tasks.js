@@ -1,13 +1,16 @@
 const express = require("express");
 const supabase = require("../../config/supabase");
 const router = express.Router();
+const auth = require("./../auth/authMiddleware");
+router.use(auth);
 
 // Filter HOD tasks (self or team)
 router.post("/filter", async (req, res) => {
   try {
     console.log('HOD tasks filter request received:', req.body);
+    let user_id = req.user.id;
+
     const {
-      user_id, // HOD user_id
       view_tasks_of, // "self" or "team"
       target_user_id, // for team view: the team member whose tasks to view
       date_filter,
@@ -321,8 +324,9 @@ router.post("/filter", async (req, res) => {
 // Create self task for HOD
 router.post("/create", async (req, res) => {
   try {
+      let user_id = req.user.id;
+
     const {
-      user_id,
       date,
       timeline,
       task_name,
@@ -415,8 +419,9 @@ router.post("/create", async (req, res) => {
 router.put("/:taskId", async (req, res) => {
   try {
     const { taskId } = req.params;
+    let user_id = req.user.id;
+
     const {
-      user_id,
       date,
       timeline,
       task_name,

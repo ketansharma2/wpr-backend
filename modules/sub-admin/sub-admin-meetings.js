@@ -6,7 +6,8 @@ const auth = require("../auth/authMiddleware");
 // Fetch meetings with SubAdmin-specific filters
 router.post("/filter", auth, async (req, res) => {
   try {
-    const { user_id, view_type, target_user_id, date_filter, status, custom_date } = req.body;
+    const { view_type, target_user_id, date_filter, status, custom_date } = req.body;
+   const user_id = req.user.id;
 
     const format = (d) => new Date(d).toISOString().split("T")[0];
 

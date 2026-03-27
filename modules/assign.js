@@ -6,8 +6,10 @@ const auth = require("./auth/authMiddleware");
 // Assign task to team member
 router.post("/create", auth, async (req, res) => {
   try {
+    let user_id = req.user.id;
+
     const {
-      user_id,
+      
       assigned_by,
       assigned_to,
       date,

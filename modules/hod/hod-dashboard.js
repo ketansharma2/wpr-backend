@@ -1,11 +1,14 @@
 const express = require("express");
 const supabase = require("../../config/supabase");
 const router = express.Router();
-
+const auth = require("./../auth/authMiddleware");
+router.use(auth);
 // Get dashboard data for HOD (can view self or team member data)
 router.post("/data", async (req, res) => {
   try {
-    const { user_id, view_type, target_user_id, date_filter = 'all' } = req.body;
+    let user_id = req.user.id;
+
+    const { view_type, target_user_id, date_filter = 'all' } = req.body;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });
@@ -401,7 +404,9 @@ router.post("/data", async (req, res) => {
 // Get tasks and meetings for HOD
 router.post("/tasks/filter", async (req, res) => {
   try {
-    const { user_id, view_tasks_of, target_user_id, date_filter = 'all', task_type = 'all', status = 'all', category = 'all' } = req.body;
+            let user_id = req.user.id;
+
+    const {  view_tasks_of, target_user_id, date_filter = 'all', task_type = 'all', status = 'all', category = 'all' } = req.body;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });

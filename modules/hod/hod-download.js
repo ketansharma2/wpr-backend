@@ -3,12 +3,14 @@ const PDFDocument = require("pdfkit");
 const supabase = require("../../config/supabase");
 
 const router = express.Router();
-
+const auth = require("./../auth/authMiddleware");
+router.use(auth);
 // -------- DOWNLOAD HOD REPORT PDF ----------
 router.post("/download", async (req, res) => {
   try {
+    let user_id = req.user.id;
+
     const {
-      user_id, // HOD user_id
       view_type, // "self" or "team"
       target_user_id, // for team view: whose report to download
       start_date,

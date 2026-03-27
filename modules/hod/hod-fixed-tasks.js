@@ -7,9 +7,13 @@ const auth = require("../auth/authMiddleware");
 router.get("/", auth, async (req, res) => {
   try {
     const logged_in_user_id = req.user.id;
-    const { user_id } = req.query;
+    let { user_id } = req.query;
+    // let user_id = req.user.id;
 
     let target_user_ids = [];
+    if(!user_id){
+      user_id =req.user.id;
+    }
 
     if (user_id) {
       // Fetch for specific user
@@ -71,7 +75,9 @@ router.get("/", auth, async (req, res) => {
 router.post("/", auth, async (req, res) => {
   try {
     const logged_in_user_id = req.user.id;
-    const { task_name, frequency, assigned_by, user_id } = req.body;
+        let user_id = req.user.id;
+
+    const { task_name, frequency, assigned_by } = req.body;
 
     // Use provided user_id or default to logged-in user
     const target_user_id = user_id || logged_in_user_id;
@@ -111,7 +117,9 @@ router.put("/:id", auth, async (req, res) => {
   try {
     const logged_in_user_id = req.user.id;
     const fixed_task_id = req.params.id;
-    const { task_name, frequency, assigned_by, user_id } = req.body;
+        let user_id = req.user.id;
+
+    const { task_name, frequency, assigned_by } = req.body;
 
     // TODO: Add permission check to ensure HOD can only update their team members' tasks
 
@@ -170,139 +178,255 @@ router.delete("/:id", auth, async (req, res) => {
 });
 
 // Auto-populate fixed tasks for all team members in HOD's department
+// router.post("/auto-populate", auth, async (req, res) => {
+//   try {
+//     const logged_in_user_id = req.user.id;
+//     const today = new Date().toISOString().split("T")[0];
+
+//     // Get HOD's department
+//     const { data: hodData, error: hodError } = await supabase
+//       .from("users")
+//       .select("dept")
+//       .eq("user_id", logged_in_user_id)
+//       .single();
+
+//     if (hodError) {
+//       console.error("HOD data error:", hodError);
+//       return res.status(400).json({ error: hodError.message });
+//     }
+
+//     // Get all team members in HOD's department
+//     const { data: teamMembers, error: teamError } = await supabase
+//       .from("users")
+//       .select("user_id")
+//       .eq("dept", hodData.dept);
+
+//     if (teamError) {
+//       console.error("Team members error:", teamError);
+//       return res.status(400).json({ error: teamError.message });
+//     }
+
+//     const teamMemberIds = teamMembers.map(member => member.user_id);
+//     const populatedTasks = [];
+
+//     // Process each team member
+//     for (const userId of teamMemberIds) {
+//       // Get all fixed tasks for this team member
+//       const { data: fixedTasks, error: fetchError } = await supabase
+//         .from("fixed_tasks")
+//         .select("*")
+//         .eq("user_id", userId);
+
+//       if (fetchError) {
+//         console.error("Fixed tasks fetch error for user", userId, ":", fetchError);
+//         continue;
+//       }
+
+//       for (const fixedTask of fixedTasks || []) {
+//         // Check if this fixed task already exists for the user (any date)
+//         const { data: existingTasks, error: checkError } = await supabase
+//           .from("self_tasks")
+//           .select("*")
+//           .eq("user_id", userId)
+//           .eq("task_name", fixedTask.task_name)
+//           .order("date", { ascending: false });
+
+//         if (checkError) {
+//           console.error("Check existing task error for user", userId, ":", checkError);
+//           continue;
+//         }
+
+//         if (existingTasks && existingTasks.length > 0) {
+//           const existing = existingTasks[0];
+
+//           // Only update if the existing task is not already for today
+//           if (existing.date !== today) {
+//             // Save to history
+//             try {
+//               await supabase
+//                 .from("task_history")
+//                 .insert({
+//                   task_id: existing.task_id,
+//                   task_name: existing.task_name,
+//                   user_id: existing.user_id,
+//                   history_date: existing.date,
+//                   time_spent: existing.time,
+//                   remarks: existing.remarks || '',
+//                   status: existing.status || 'pending',
+//                   created_by: logged_in_user_id,
+//                 });
+//             } catch (historyError) {
+//               console.error("Failed to save to history for user", userId, ":", historyError);
+//             }
+
+//             // Update the existing task with today's data
+//             const { data: updatedTask, error: updateError } = await supabase
+//               .from("self_tasks")
+//               .update({
+//                 time: 0,
+//                 status: 'Not Started',
+//                 date: today,
+//                 timeline: today,
+//                 task_type: 'Fixed',
+//                 remarks: '',
+//                 file_link: ''
+//               })
+//               .eq("task_id", existing.task_id)
+//               .select()
+//               .single();
+
+//             if (updateError) {
+//               console.error("Auto-populate task update error for user", userId, ":", updateError);
+//               continue;
+//             }
+
+//             populatedTasks.push(updatedTask);
+//           }
+//           // If already for today, skip
+//         } else {
+//           // Task doesn't exist, create new
+//           const { data: newTask, error: insertError } = await supabase
+//             .from("self_tasks")
+//             .insert({
+//               user_id: userId,
+//               task_name: fixedTask.task_name,
+//               time: 0,
+//               status: 'Not Started',
+//               date: today,
+//               timeline: today,
+//               task_type: 'Fixed'
+//             })
+//             .select()
+//             .single();
+
+//           if (insertError) {
+//             console.error("Auto-populate task insert error for user", userId, ":", insertError);
+//             continue;
+//           }
+
+//           populatedTasks.push(newTask);
+//         }
+//       }
+//     }
+
+//     res.json({
+//       message: `Auto-populated ${populatedTasks.length} fixed tasks for team members today`,
+//       populated_tasks: populatedTasks
+//     });
+
+//   } catch (error) {
+//     console.error("Auto-populate error:", error);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
+
+
 router.post("/auto-populate", auth, async (req, res) => {
   try {
-    const logged_in_user_id = req.user.id;
+    const user_id = req.user.id;
     const today = new Date().toISOString().split("T")[0];
 
-    // Get HOD's department
-    const { data: hodData, error: hodError } = await supabase
-      .from("users")
-      .select("dept")
-      .eq("user_id", logged_in_user_id)
-      .single();
+    // Get all fixed tasks for the user
+    const { data: fixedTasks, error: fetchError } = await supabase
+      .from("fixed_tasks")
+      .select("*")
+      .eq("user_id", user_id);
 
-    if (hodError) {
-      console.error("HOD data error:", hodError);
-      return res.status(400).json({ error: hodError.message });
+    if (fetchError) {
+      console.error("Fixed tasks fetch error:", fetchError);
+      return res.status(400).json({ error: fetchError.message });
     }
 
-    // Get all team members in HOD's department
-    const { data: teamMembers, error: teamError } = await supabase
-      .from("users")
-      .select("user_id")
-      .eq("dept", hodData.dept);
-
-    if (teamError) {
-      console.error("Team members error:", teamError);
-      return res.status(400).json({ error: teamError.message });
-    }
-
-    const teamMemberIds = teamMembers.map(member => member.user_id);
     const populatedTasks = [];
 
-    // Process each team member
-    for (const userId of teamMemberIds) {
-      // Get all fixed tasks for this team member
-      const { data: fixedTasks, error: fetchError } = await supabase
-        .from("fixed_tasks")
+    for (const fixedTask of fixedTasks || []) {
+      // Check if this fixed task already exists for the user (any date)
+      const { data: existingTasks, error: checkError } = await supabase
+        .from("self_tasks")
         .select("*")
-        .eq("user_id", userId);
+        .eq("user_id", user_id)
+        .eq("task_name", fixedTask.task_name)
+        .order("date", { ascending: false });
 
-      if (fetchError) {
-        console.error("Fixed tasks fetch error for user", userId, ":", fetchError);
+      if (checkError) {
+        console.error("Check existing task error:", checkError);
         continue;
       }
 
-      for (const fixedTask of fixedTasks || []) {
-        // Check if this fixed task already exists for the user (any date)
-        const { data: existingTasks, error: checkError } = await supabase
-          .from("self_tasks")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("task_name", fixedTask.task_name)
-          .order("date", { ascending: false });
+      if (existingTasks && existingTasks.length > 0) {
+        const existing = existingTasks[0];
 
-        if (checkError) {
-          console.error("Check existing task error for user", userId, ":", checkError);
-          continue;
-        }
-
-        if (existingTasks && existingTasks.length > 0) {
-          const existing = existingTasks[0];
-
-          // Only update if the existing task is not already for today
-          if (existing.date !== today) {
-            // Save to history
-            try {
-              await supabase
-                .from("task_history")
-                .insert({
-                  task_id: existing.task_id,
-                  task_name: existing.task_name,
-                  user_id: existing.user_id,
-                  history_date: existing.date,
-                  time_spent: existing.time,
-                  remarks: existing.remarks || '',
-                  status: existing.status || 'pending',
-                  created_by: logged_in_user_id,
-                });
-            } catch (historyError) {
-              console.error("Failed to save to history for user", userId, ":", historyError);
-            }
-
-            // Update the existing task with today's data
-            const { data: updatedTask, error: updateError } = await supabase
-              .from("self_tasks")
-              .update({
-                time: 0,
-                status: 'Not Started',
-                date: today,
-                timeline: today,
-                task_type: 'Fixed',
-                remarks: '',
-                file_link: ''
-              })
-              .eq("task_id", existing.task_id)
-              .select()
-              .single();
-
-            if (updateError) {
-              console.error("Auto-populate task update error for user", userId, ":", updateError);
-              continue;
-            }
-
-            populatedTasks.push(updatedTask);
+        // Only update if the existing task is not already for today
+        if (existing.date !== today) {
+          // Save to history
+          try {
+            await supabase
+              .from("task_history")
+              .insert({
+                task_id: existing.task_id,
+                task_name: existing.task_name,
+                user_id: existing.user_id,
+                history_date: existing.date,
+                time_spent: existing.time,
+                remarks: existing.remarks || '',
+                status: existing.status || 'pending',
+                created_by: existing.user_id,
+              });
+          } catch (historyError) {
+            console.error("Failed to save to history:", historyError);
           }
-          // If already for today, skip
-        } else {
-          // Task doesn't exist, create new
-          const { data: newTask, error: insertError } = await supabase
+
+          // Update the existing task with today's data
+          const { data: updatedTask, error: updateError } = await supabase
             .from("self_tasks")
-            .insert({
-              user_id: userId,
-              task_name: fixedTask.task_name,
+            .update({
               time: 0,
               status: 'Not Started',
               date: today,
               timeline: today,
-              task_type: 'Fixed'
+              task_type: 'Fixed',
+              remarks: '',
+              file_link: ''
             })
+            .eq("task_id", existing.task_id)
             .select()
             .single();
 
-          if (insertError) {
-            console.error("Auto-populate task insert error for user", userId, ":", insertError);
+          if (updateError) {
+            console.error("Auto-populate task update error:", updateError);
             continue;
           }
 
-          populatedTasks.push(newTask);
+          populatedTasks.push(updatedTask);
         }
+        // If already for today, skip
+      } else {
+        // Task doesn't exist, create new
+        const { data: newTask, error: insertError } = await supabase
+          .from("self_tasks")
+          .insert({
+            user_id,
+            task_name: fixedTask.task_name,
+            time: 0,
+            status: 'Not Started',
+            date: today,
+            timeline: today,
+            task_type: 'Fixed'
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error("Auto-populate task insert error:", insertError);
+          continue;
+        }
+
+        populatedTasks.push(newTask);
       }
     }
 
     res.json({
-      message: `Auto-populated ${populatedTasks.length} fixed tasks for team members today`,
+      message: `Auto-populated ${populatedTasks.length} fixed tasks for today`,
       populated_tasks: populatedTasks
     });
 
@@ -311,5 +435,4 @@ router.post("/auto-populate", auth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 module.exports = router;

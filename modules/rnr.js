@@ -35,7 +35,8 @@ router.get("/", auth, async (req, res) => {
 // Create a new R&R entry
 router.post("/", auth, async (req, res) => {
   try {
-    const { rnr, description, end_goal, timings, guideline, process_limitations, user_id } = req.body;
+    const { rnr, description, end_goal, timings, guideline, process_limitations } = req.body;
+        let user_id = req.user.id;
 
     // Use provided user_id or default to authenticated user
     const target_user_id = user_id || req.user.id;

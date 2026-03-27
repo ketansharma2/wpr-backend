@@ -30,7 +30,9 @@ router.get("/", auth, async (req, res) => {
 // Create a new fixed task
 router.post("/", auth, async (req, res) => {
   try {
-    const { task_name, frequency, assigned_by, user_id } = req.body;
+    let user_id = req.user.id;
+
+    const { task_name, frequency, assigned_by } = req.body;
 
     // Use provided user_id or fallback to authenticated user
     const target_user_id = user_id || req.user.id;

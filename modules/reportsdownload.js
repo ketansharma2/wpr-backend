@@ -2,14 +2,14 @@ const express = require("express");
 const PDFDocument = require("pdfkit");
 const supabase = require("../config/supabase");
 const auth = require("./auth/authMiddleware");
-
 const router = express.Router();
-
+router.use(auth);
 // -------- DOWNLOAD WEEKLY REPORT PDF ----------
 router.post("/download", async (req, res) => {
   try {
+  let user_id = req.user.id;
+
     const {
-      user_id,
       start_date,
       end_date,
       task_type,

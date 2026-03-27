@@ -2,11 +2,13 @@ const express = require("express");
 const supabase = require("../config/supabase");
 const router = express.Router();
 const auth = require("./auth/authMiddleware");
+router.use(auth);
 
 //fetch meets with filters
 router.post("/filter", async (req, res) => {
   try {
-    const { user_id, date_filter, status, custom_date } = req.body;
+    const {  date_filter, status, custom_date } = req.body;
+    let user_id = req.user.id;
 
     const format = (d) => new Date(d).toISOString().split("T")[0];
 
@@ -77,6 +79,7 @@ router.post("/filter", async (req, res) => {
     res.json({ meetings: data });
 
   } catch (err) {
+    console.log('check',err);
     res.status(500).json({ error: "Server Error" });
   }
 });

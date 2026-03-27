@@ -2,7 +2,7 @@
   const supabase = require("../config/supabase");
   const router = express.Router();
   const auth = require("./auth/authMiddleware");
-
+router.use(auth);
   // Get projections for the logged-in user (matching assigned_to) with subtasks
   router.get("/", auth, async (req, res) => {
     try {

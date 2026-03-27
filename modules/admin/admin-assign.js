@@ -3,11 +3,13 @@ const supabase = require("../../config/supabase");
 const router = express.Router();
 const auth = require("../auth/authMiddleware");
 // Admin assign task to any member
-router.post("/create", async (req, res) => {
+router.post("/create", auth,async (req, res) => {
   try {
+
+    let user_id = req.user.id;
+     let  assigned_by = user_id;  // Admin user_id
+
     const {
-      user_id, // Admin user_id
-      assigned_by, // Admin user_id
       assigned_to, // Any member user_id
       date,
       timeline,
@@ -19,6 +21,7 @@ router.post("/create", async (req, res) => {
       parameter,
       end_goal
     } = req.body;
+    console.log('asigne check:',assignee_remarks);
 
     const { data, error } = await supabase
       .from("master_tasks")

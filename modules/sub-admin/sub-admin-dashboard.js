@@ -1,11 +1,13 @@
 const express = require("express");
 const supabase = require("../../config/supabase");
 const router = express.Router();
+const auth = require("../auth/authMiddleware");
 
 // Get dashboard data for SubAdmin (can view self or team member data)
-router.post("/data", async (req, res) => {
+router.post("/data", auth, async (req, res) => {
   try {
-    const { user_id, view_type, target_user_id, date_filter = 'today', from_date, to_date } = req.body;
+    const { view_type, target_user_id, date_filter = 'today', from_date, to_date } = req.body;
+    const user_id = req.user.id;
 
     if (!user_id) {
       return res.status(400).json({ error: "user_id is required" });

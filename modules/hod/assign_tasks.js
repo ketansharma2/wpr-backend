@@ -1,12 +1,15 @@
 const express = require("express");
 const supabase = require("../../config/supabase");
 const router = express.Router();
+const auth = require("./../auth/authMiddleware");
+router.use(auth);
 
 // Assign task to team member
 router.post("/create", async (req, res) => {
   try {
+        let user_id = req.user.id;
+
     const {
-      user_id, // HOD user_id
       assigned_by, // HOD user_id
       assigned_to, // team member user_id
       date,

@@ -7,7 +7,8 @@ const auth = require("../auth/authMiddleware");
 router.get("/", auth, async (req, res) => {
   try {
     const logged_in_user_id = req.user.id;
-    const { user_id, month } = req.query;
+    const { month } = req.query;
+    let user_id = req.user.id;
 
     let query = supabase
       .from("monthly_projection")

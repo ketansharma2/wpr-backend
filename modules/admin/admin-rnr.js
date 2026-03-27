@@ -11,7 +11,9 @@ router.get("/", auth, async (req, res) => {
       return res.status(403).json({ error: "Access denied. Admin privileges required." });
     }
 
-    const { user_id } = req.query;
+    // const { user_id } = req.query;
+      let user_id = req.user.id;
+
 
     // If no user_id provided, return empty array (user must select a member first)
     if (!user_id) {

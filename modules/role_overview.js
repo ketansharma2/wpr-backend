@@ -4,21 +4,54 @@ const router = express.Router();
 const auth = require("./auth/authMiddleware");
 
 // GET role overview by user_id
-router.get("/:user_id", async (req, res) => {
+// router.get("/:user_id", async (req, res) => {
+//   try {
+//     const { user_id } = req.params;
+
+//     const { data, error } = await supabase
+//       .from("role_overview")
+//       .select("*")
+//       .eq("user_id", user_id)
+//       .maybeSingle();
+//     if (error) return res.status(400).json({ error: error.message });
+
+//     res.json({ role_overview: data });
+
+//   } catch (err) {
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
+
+router.get("/", auth, async (req, res) => {
   try {
-    const { user_id } = req.params;
+
+    let targetUserId = req.user.id;
+
+    // Allow HOD, Admin, Sub Admin to view other users
+    if (
+      req.query.user_id &&
+      (req.user.user_type === "HOD" ||
+       req.user.user_type === "Admin" ||
+       req.user.user_type === "Sub Admin")
+    ) {
+      targetUserId = req.query.user_id;
+    }
 
     const { data, error } = await supabase
       .from("role_overview")
       .select("*")
-      .eq("user_id", user_id)
-      .single();
+      .eq("user_id", targetUserId)
+      .maybeSingle();
 
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) {
+      console.error("Role overview fetch error:", error);
+      return res.status(400).json({ error: error.message });
+    }
 
-    res.json({ role_overview: data });
+    res.json({ role_overview: data || null });
 
   } catch (err) {
+    console.error("Role overview error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });

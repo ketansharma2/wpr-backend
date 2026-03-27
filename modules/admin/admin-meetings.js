@@ -4,11 +4,12 @@ const router = express.Router();
 const auth = require("../auth/authMiddleware");
 
 // Filter all members' meetings for admin
-router.post("/filter", async (req, res) => {
+router.post("/filter",auth , async (req, res) => {
   try {
     console.log('Admin meetings filter request received:', req.body);
+  let user_id = req.user.id;
+
     const {
-      user_id, // Admin user_id (for logging)
       target_user_id, // specific member (optional - use 'all' for all members)
       date_filter,
       status,

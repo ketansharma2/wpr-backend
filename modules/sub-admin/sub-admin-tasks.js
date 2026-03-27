@@ -6,8 +6,10 @@ const auth = require("../auth/authMiddleware");
 // Get SubAdmin tasks - self tasks by default, master tasks when team member selected
 router.post("/filter", auth, async (req, res) => {
   try {
+    const user_id = req.user.id;
+
     const {
-      user_id,
+      
       view_tasks_of = 'self',
       target_user_id,
       date_filter = 'all',
