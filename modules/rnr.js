@@ -9,10 +9,10 @@ router.get("/", auth, async (req, res) => {
     let targetUserId = req.user.id;
 
     // Allow HOD, admin, and Sub Admin to fetch R&R for specific user
-    if (req.query.user_id && (req.user.user_type === 'HOD' || req.user.user_type === 'admin' || req.user.user_type === 'Sub Admin')) {
+    if (req.query.user_id && (req.user.user_type === 'HOD' || req.user.user_type === 'Admin' || req.user.user_type === 'Sub Admin')) {
       targetUserId = req.query.user_id;
     }
-
+console.log('chekc:',targetUserId);
     const { data: rnrEntries, error } = await supabase
       .from("rnr")
       .select("*")
@@ -24,6 +24,7 @@ router.get("/", auth, async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
+    console.log('rnr',rnrEntries);
     res.json(rnrEntries || []);
 
   } catch (error) {

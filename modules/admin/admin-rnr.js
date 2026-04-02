@@ -6,49 +6,32 @@ const auth = require("../auth/authMiddleware");
 // Get R&R entries for admin panel (admin can view specific user's R&R or all if specified)
 router.get("/", auth, async (req, res) => {
   try {
-    // Only allow admin users
-    if (req.user.user_type !== 'Admin') {
-      return res.status(403).json({ error: "Access denied. Admin privileges required." });
+    let targetUserId = req.user.id;
+
+    // Allow HOD, admin, and Sub Admin to fetch R&R for specific user
+    if (req.query.user_id && (req.user.user_type === 'HOD' || req.user.user_type === 'Admin' || req.user.user_type === 'Sub Admin')) {
+      targetUserId = req.query.user_id;
     }
-
-    // const { user_id } = req.query;
-      let user_id = req.user.id;
-
-
-    // If no user_id provided, return empty array (user must select a member first)
-    if (!user_id) {
-      return res.json([]);
-    }
-
-    let query = supabase
+console.log('chekc:',targetUserId);
+    const { data: rnrEntries, error } = await supabase
       .from("rnr")
-      .select(`
-        *,
-        users!user_id(name, email, dept)
-      `);
-
-    // If user_id is 'all', fetch for all users; otherwise, fetch for specific user
-    if (user_id !== 'all') {
-      query = query.eq("user_id", user_id);
-    }
-
-    query = query.order("created_at", { ascending: true });
-
-    const { data: rnrEntries, error } = await query;
+      .select("*")
+      .eq("user_id", targetUserId)
+      .order("created_at", { ascending: true });
 
     if (error) {
-      console.error("Admin R&R fetch error:", error);
+      console.error("R&R fetch error:", error);
       return res.status(400).json({ error: error.message });
     }
 
+    console.log('rnr',rnrEntries);
     res.json(rnrEntries || []);
 
   } catch (error) {
-    console.error("Admin R&R error:", error);
+    console.error("R&R error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 // Get all users for admin RnR filter (excluding the logged-in admin)
 router.get("/members", auth, async (req, res) => {
   try {

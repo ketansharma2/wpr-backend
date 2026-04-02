@@ -26,7 +26,7 @@ router.get("/", auth, async (req, res) => {
   try {
 
     let targetUserId = req.user.id;
-
+  console.log('req.user.user_type',req.user.user_type);
     // Allow HOD, Admin, Sub Admin to view other users
     if (
       req.query.user_id &&
@@ -36,6 +36,8 @@ router.get("/", auth, async (req, res) => {
     ) {
       targetUserId = req.query.user_id;
     }
+
+    console.log('targetUserId',targetUserId);
 
     const { data, error } = await supabase
       .from("role_overview")
@@ -47,6 +49,7 @@ router.get("/", auth, async (req, res) => {
       console.error("Role overview fetch error:", error);
       return res.status(400).json({ error: error.message });
     }
+
 
     res.json({ role_overview: data || null });
 
