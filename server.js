@@ -36,6 +36,7 @@ app.use("/hod/monthly-projection", require("./modules/hod/monthly_projection"));
 app.use("/login", require("./modules/auth/login"));
 app.use("/refresh", require("./modules/auth/refresh"));
 app.use("/weekly", require("./modules/weekly"));
+app.use("/sop", require("./modules/sop"));
 app.use("/reports", require("./modules/reportsdownload"));
 app.use("/admin/members", require("./modules/admin/members"));
 app.use("/admin/tasks", require("./modules/admin/admin-tasks"));
