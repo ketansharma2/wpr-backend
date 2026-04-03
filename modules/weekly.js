@@ -182,7 +182,7 @@ router.post("/", async (req, res) => {
 
         if (item.remarks) {
           remarksMap[item.task_id].push(
-            `${item.history_date} : ${item.remarks}`
+            `${item.history_date} : ${item.remarks}: ${item.time_spent}: ${item.status}`
           );
         }
       });
@@ -224,7 +224,7 @@ router.post("/", async (req, res) => {
         latestHistoryMap[task.task_id]?.remarks || null,
 
       remarks_between_dates:
-        remarksMap[task.task_id]?.join(" | ") || task.remarks,
+        remarksMap[task.task_id]?.join(" | "),
 
       latest_status:
         latestHistoryMap[task.task_id]?.status || task.status,

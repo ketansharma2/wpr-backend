@@ -269,7 +269,7 @@ router.post("/", async (req, res) => {
   let formattedDate = item.history_date ? new Date(item.history_date).toLocaleDateString("en-GB") : "N/A";
   let remarks = item.remarks || "-";
 
-  remarksMap[item.task_id].push(`${formattedDate}: ${remarks}`);
+  remarksMap[item.task_id].push(`${item.history_date} : ${item.remarks}: ${item.time_spent}: ${item.status}`);
 });
 
       const { data: meetingsData, error: meetingsError } = await supabase

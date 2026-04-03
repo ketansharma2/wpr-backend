@@ -127,7 +127,7 @@ router.post("/filter", auth, async (req, res) => {
         if (!remarksMap[item.task_id]) remarksMap[item.task_id] = [];
 
         remarksMap[item.task_id].push(
-          `${item.history_date}: ${item.remarks || "-"}`
+          `${item.history_date} : ${item.remarks}: ${item.time_spent}: ${item.status}`
         );
       });
 
