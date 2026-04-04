@@ -30,6 +30,8 @@ app.use("/hod/meetings", require("./modules/hod/hod-meetings"));
 app.use("/hod/dashboard", require("./modules/hod/hod-dashboard"));
 app.use("/hod/weekly", require("./modules/hod/hod-weekly"));
 app.use("/hod/reports", require("./modules/hod/hod-download"));
+app.use("/sop", require("./modules/hod/hod-sop-upload"));
+
 app.use("/hod/fixed-tasks", require("./modules/hod/hod-fixed-tasks"));
 app.use("/hod/monthly-projection", require("./modules/hod/monthly_projection"));
 
